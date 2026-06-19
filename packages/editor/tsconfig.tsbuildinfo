@@ -1,0 +1,1 @@
+{"root":["./src/canvas.tsx","./src/index.ts","./src/types.ts","./src/components/connection-status.tsx","./src/components/consumed-badge.tsx","./src/components/inline-editor.tsx","./src/components/node-library.tsx","./src/components/property-panel.tsx","./src/components/toolbar.tsx","./src/edges/mermaid-edge.tsx","./src/nodes/mermaid-nodes.tsx"],"errors":true,"version":"5.9.3"}

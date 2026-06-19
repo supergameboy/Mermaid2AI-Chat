@@ -1,0 +1,11 @@
+node_modules/
+ScreenShot/
+.vscode/
+.trae/
+vscode-extension-test/
+test-screenshots/
+docs/
+1.md
+待更新.txt
+Mermaid Reverse Editor Skill.md
+todo.md

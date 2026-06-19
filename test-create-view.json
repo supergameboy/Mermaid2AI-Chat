@@ -1,0 +1,12 @@
+{
+  "params": {
+    "arguments": {
+      "mermaid": "flowchart TD\n  asymmetric>不对称]\n  parallelogram-reverse[\\反向平行四边形\\]\n  trapezoid[/梯形\\]\n  trapezoid-reverse[\\反向梯形/]",
+      "title": "扩展形状测试"
+    },
+    "name": "create_view"
+  },
+  "method": "tools/call",
+  "id": 1,
+  "jsonrpc": "2.0"
+}

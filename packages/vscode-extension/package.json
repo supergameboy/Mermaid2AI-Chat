@@ -1,0 +1,74 @@
+{
+  "name": "@mermaid-editor/vscode-extension",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mermaid 反向编辑器 VSCode 插件 — 可视化编辑流程图，反向输出 Mermaid 代码",
+  "type": "commonjs",
+  "main": "./dist/extension.js",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "mermaid-editor.openPanel",
+        "title": "打开 Mermaid 编辑器",
+        "category": "Mermaid"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mermaid-editor",
+          "title": "Mermaid 编辑器",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "mermaid-editor": [
+        {
+          "id": "mermaid-editor.welcome",
+          "name": "Mermaid 编辑器",
+          "when": "!mermaid-editor.panelOpen"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "mermaid-editor.openPanel",
+          "when": "view == mermaid-editor.welcome",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build:webview": "vite build --config webview/vite.config.ts",
+    "build:extension": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node18",
+    "build": "pnpm build:webview && pnpm build:extension",
+    "dev:webview": "vite build --config webview/vite.config.ts --watch",
+    "dev:extension": "pnpm build:extension --watch",
+    "typecheck": "tsc --noEmit",
+    "package": "pnpm build && vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@mermaid-editor/serializer": "workspace:*",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@mermaid-editor/editor": "workspace:*",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/vscode": "^1.85.0",
+    "@types/ws": "^8.5.10",
+    "@vitejs/plugin-react": "^4.3.0",
+    "esbuild": "^0.21.5",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0"
+  }
+}

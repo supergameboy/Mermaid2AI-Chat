@@ -1,0 +1,26 @@
+{
+  "name": "mermaid-flow-editor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mermaid 反向编辑器 — 通过编辑可视化流程元素，反向输出 mermaid 代码，配套 MCP 服务和 SKILL",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "build": "pnpm -r run build",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "pnpm -r run lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "esbuild": "^0.21.5"
+    }
+  }
+}

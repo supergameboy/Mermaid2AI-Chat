@@ -1,0 +1,1 @@
+{"version":3,"file":"edge-serializer.d.ts","sourceRoot":"","sources":["../src/edge-serializer.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,WAAW,EAAE,gBAAgB,EAAE,MAAM,YAAY,CAAC;AAgChE;;;;;;;;;;;;;GAaG;AACH,wBAAgB,aAAa,CAAC,IAAI,EAAE,WAAW,GAAG,MAAM,CAwBvD;AAED;;GAEG;AACH,wBAAgB,aAAa,CAAC,KAAK,EAAE,gBAAgB;UAzD7C,MAAM;iBACC,MAAM;eACR,MAAM;EAyDlB"}

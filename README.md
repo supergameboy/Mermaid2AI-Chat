@@ -25,22 +25,6 @@
 
 ```
 mermaid反向编辑器/
-├── docs/                          # 设计文档
-│   ├── design/                    # 分形设计文档
-│   │   ├── fractal-design-...-总规划.md
-│   │   ├── fractal-design-...-模块1-可视化编辑器.md
-│   │   ├── fractal-design-...-模块2-Mermaid序列化器.md
-│   │   ├── fractal-design-...-模块3-MCP服务端.md
-│   │   ├── fractal-design-...-模块4-SKILL规范.md
-│   │   └── 调研报告-避免重复造轮子分析-20260619.md
-│   ├── requirements/              # 需求文档
-│   │   └── 需求规格说明书.md
-│   ├── architecture/              # 架构文档
-│   │   └── 架构设计文档.md
-│   ├── testing/                   # 测试文档
-│   │   └── 测试计划.md
-│   └── deployment/                # 部署文档
-│       └── 部署指南.md
 ├── skills/                        # SKILL 文件
 │   └── mermaid-flow-editor/
 │       ├── SKILL.md               # SKILL 主文件

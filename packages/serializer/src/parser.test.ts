@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseMermaid, serializeMermaid } from './index.js';
+import { ErrorCollectorImpl } from './error-collector.js';
 
 describe('parser — AST 原始 ID 保留', () => {
   it('should preserve original node IDs from mermaid code', () => {

@@ -21,8 +21,6 @@ export type {
   Viewport,
   CanvasSource,
   ConsumedState,
-  View,
-  ViewSummary,
   ParseResult,
   ParseSuccessResult,
   ParseFailureResult,

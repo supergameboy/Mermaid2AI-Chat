@@ -124,26 +124,6 @@ export interface ConsumedState {
   canvasSource: CanvasSource;
 }
 
-// === 视图（独立画布实体）===
-export interface View {
-  id: string;
-  title: string | null;
-  mermaid: string;
-  canvas: CanvasState;
-  consumed: ConsumedState;
-  viewport: Viewport;
-  createdAt: number;
-  updatedAt: number;
-}
-
-// === 视图摘要（供标签栏轻量显示）===
-export interface ViewSummary {
-  id: string;
-  title: string | null;
-  canvasSource: CanvasSource;
-  createdAt: number;
-}
-
 // === 解析结果 ===
 export interface ParseSuccessResult {
   success: true;

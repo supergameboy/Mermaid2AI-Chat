@@ -17,15 +17,8 @@ export interface EditorStore extends CanvasState, ConsumedState {
   title: string | null;
   viewport: Viewport;
 
-  // 画布操作
+  // 画布操作（整体替换，客户端通过 canvas_edit 发送完整快照）
   setCanvas: (state: Partial<CanvasState>) => void;
-  addNode: (node: MermaidNode) => void;
-  updateNode: (id: string, data: Partial<MermaidNode>) => void;
-  removeNode: (id: string) => void;
-  addEdge: (edge: MermaidEdge) => void;
-  updateEdge: (id: string, data: Partial<MermaidEdge>) => void;
-  removeEdge: (id: string) => void;
-  setDirection: (dir: FlowchartDirection) => void;
 
   // 视口操作
   setViewport: (viewport: Viewport) => void;
@@ -72,55 +65,9 @@ export const useEditorStore = create<EditorStore>((set, get, store) => ({
   title: null,
   viewport: { x: 0, y: 0, zoom: 1 },
 
-  // 画布操作
+  // 画布操作（整体替换）
   setCanvas: (state) =>
     set((s) => ({ ...s, ...state })),
-
-  addNode: (node) =>
-    set((s) => ({
-      nodes: [...s.nodes, node],
-      consumed: false,
-      canvasSource: 'user',
-    })),
-
-  updateNode: (id, data) =>
-    set((s) => ({
-      nodes: s.nodes.map((n) => (n.id === id ? { ...n, ...data, data: { ...n.data, ...data.data } } : n)),
-      consumed: false,
-      canvasSource: 'user',
-    })),
-
-  removeNode: (id) =>
-    set((s) => ({
-      nodes: s.nodes.filter((n) => n.id !== id),
-      edges: s.edges.filter((e) => e.source !== id && e.target !== id),
-      consumed: false,
-      canvasSource: 'user',
-    })),
-
-  addEdge: (edge) =>
-    set((s) => ({
-      edges: [...s.edges, edge],
-      consumed: false,
-      canvasSource: 'user',
-    })),
-
-  updateEdge: (id, data) =>
-    set((s) => ({
-      edges: s.edges.map((e) => (e.id === id ? { ...e, ...data, data: { ...e.data, ...data.data } } : e)),
-      consumed: false,
-      canvasSource: 'user',
-    })),
-
-  removeEdge: (id) =>
-    set((s) => ({
-      edges: s.edges.filter((e) => e.id !== id),
-      consumed: false,
-      canvasSource: 'user',
-    })),
-
-  setDirection: (dir) =>
-    set({ direction: dir, consumed: false, canvasSource: 'user' }),
 
   // 视口操作（viewport 变化不重置 consumed，因为不是内容编辑）
   setViewport: (viewport) => set({ viewport }),

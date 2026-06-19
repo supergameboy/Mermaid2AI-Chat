@@ -95,58 +95,8 @@ describe('EditorStore', () => {
       expect(canvas.direction).toBe('LR');
     });
 
-    it('should reset consumed to false on addNode', () => {
-      useEditorStore.getState().setConsumed(true);
-      useEditorStore.getState().addNode(sampleNode);
-      expect(useEditorStore.getState().consumed).toBe(false);
-      expect(useEditorStore.getState().canvasSource).toBe('user');
-    });
-
-    it('should reset consumed on updateNode', () => {
-      useEditorStore.getState().setCanvas({ nodes: [sampleNode] });
-      useEditorStore.getState().setConsumed(true);
-      useEditorStore.getState().updateNode('node1', { data: { label: '更新', shape: 'rect' } });
-      expect(useEditorStore.getState().consumed).toBe(false);
-    });
-
-    it('should reset consumed on removeNode', () => {
-      useEditorStore.getState().setCanvas({ nodes: [sampleNode] });
-      useEditorStore.getState().setConsumed(true);
-      useEditorStore.getState().removeNode('node1');
-      expect(useEditorStore.getState().consumed).toBe(false);
-      expect(useEditorStore.getState().nodes).toHaveLength(0);
-    });
-
-    it('should remove related edges when node removed', () => {
-      useEditorStore.getState().setCanvas({ nodes: [sampleNode], edges: [sampleEdge] });
-      useEditorStore.getState().removeNode('node1');
-      expect(useEditorStore.getState().edges).toHaveLength(0);
-    });
-
-    it('should reset consumed on addEdge', () => {
-      useEditorStore.getState().setConsumed(true);
-      useEditorStore.getState().addEdge(sampleEdge);
-      expect(useEditorStore.getState().consumed).toBe(false);
-    });
-
-    it('should reset consumed on updateEdge', () => {
-      useEditorStore.getState().setCanvas({ edges: [sampleEdge] });
-      useEditorStore.getState().setConsumed(true);
-      useEditorStore.getState().updateEdge('edge1', { data: { edgeStyle: 'dotted' } });
-      expect(useEditorStore.getState().consumed).toBe(false);
-    });
-
-    it('should reset consumed on removeEdge', () => {
-      useEditorStore.getState().setCanvas({ edges: [sampleEdge] });
-      useEditorStore.getState().setConsumed(true);
-      useEditorStore.getState().removeEdge('edge1');
-      expect(useEditorStore.getState().consumed).toBe(false);
-    });
-
-    it('should reset consumed on setDirection', () => {
-      useEditorStore.getState().setConsumed(true);
-      useEditorStore.getState().setDirection('LR');
-      expect(useEditorStore.getState().consumed).toBe(false);
+    it('should set direction via setCanvas', () => {
+      useEditorStore.getState().setCanvas({ direction: 'LR' });
       expect(useEditorStore.getState().direction).toBe('LR');
     });
   });

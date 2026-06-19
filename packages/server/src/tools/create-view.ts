@@ -57,7 +57,7 @@ export function registerCreateViewTool(server: McpServer, wsServer: WsServer): v
         store.setTitle(title ?? null);
 
         // 广播 create_view 通知（包含 canvas_update + create_view 消息）
-        wsServer.broadcastCreateView({ mermaid, title });
+        wsServer.broadcastCreateView({ mermaid, title: title ?? null });
 
         // 广播消费状态更新
         wsServer.broadcastConsumedUpdate();
@@ -72,6 +72,7 @@ export function registerCreateViewTool(server: McpServer, wsServer: WsServer): v
               message: '已展示给用户',
               nodeCount: parseResult.canvas.nodes.length,
               edgeCount: parseResult.canvas.edges.length,
+              title: title ?? null,
               ...(parseResult.errors.length > 0 ? { warnings: parseResult.errors } : {}),
             }),
           }],

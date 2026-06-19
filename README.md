@@ -34,8 +34,9 @@ mermaid2ai-chat/
 ├── skills/                            # SKILL 文件
 │   └── mermaid-flow-editor/
 │       ├── SKILL.md                   # SKILL 主文件
-│       ├── references/                # 语法参考与示例
-│       └── examples.md                # 示例库
+│       └── references/                # 语法参考与示例
+│           ├── mermaid-syntax.md      # Mermaid 语法参考（14种形状 + 8种边样式）
+│           └── examples.md            # 示例库（9个场景示例）
 ```
 
 ## 模块划分

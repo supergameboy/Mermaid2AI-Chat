@@ -59,6 +59,26 @@ html, body, #root {
   text-align: center;
 }
 
+.toolbar-actions {
+  margin-left: auto;
+}
+
+.toolbar-btn {
+  padding: 4px 12px;
+  font-size: 13px;
+  color: #333;
+  background: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toolbar-btn:hover {
+  color: #1890ff;
+  border-color: #1890ff;
+}
+
 /* 主内容区 */
 .main-content {
   display: flex;
@@ -258,6 +278,17 @@ html, body, #root {
   box-shadow: 0 0 0 2px #1890ff;
 }
 
+/* Handle 悬停显示：默认隐藏，鼠标悬停节点时显示 */
+.mermaid-node .react-flow__handle {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.mermaid-node:hover .react-flow__handle,
+.mermaid-node.selected .react-flow__handle {
+  opacity: 1;
+}
+
 /* 边标签 */
 .edge-label {
   cursor: pointer;
@@ -320,6 +351,48 @@ html, body, #root {
   justify-content: space-between;
   font-size: 12px;
   color: #999;
+}
+
+/* 样式编辑区 */
+.panel-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  margin-top: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #eee;
+}
+
+.panel-color-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-color {
+  width: 32px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  cursor: pointer;
+  background: #fff;
+}
+
+.panel-reset-btn {
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #666;
+  background: #f5f5f5;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.panel-reset-btn:hover {
+  color: #1890ff;
+  border-color: #1890ff;
 }
 
 .info-label {

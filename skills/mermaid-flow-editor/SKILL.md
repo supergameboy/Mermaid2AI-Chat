@@ -2,9 +2,10 @@
 name: mermaid-flow-editor
 description: |
   This skill should be used when the user asks to "看看我画的", "分析这个流程",
-  "我画了个图", "读取画布", "read my drawing", or mentions analyzing a flowchart
-  they've drawn in the visual editor. Also use when the user asks to "画流程图",
-  "展示流程", "可视化流程", "visualize flow", or wants to show a flow in an
+  "我画了个图", "我画的流程图", "看看这个图", "读取画布", "read my drawing",
+  or mentions analyzing a flowchart they've drawn in the visual editor.
+  Also use when the user asks to "画流程图", "画一个流程", "展示流程",
+  "可视化流程", "visualize flow", or wants to show a flow in an
   interactive editable canvas. Also triggers on mentions of "mermaid",
   "flowchart", "process diagram", or "流程图" in the context of drawing,
   reading, or visualizing process flows. Core capability: read user's drawn
@@ -56,6 +57,20 @@ AI 生成流程图代码，通过 `create_view` 展示到编辑器画布。
 3. 根据返回结果处理：
    - `success: true` → 告知"已展示到编辑器画布"
    - `success: false` → 修正 mermaid 代码后重试（最多1次），仍失败则展示错误信息
+
+## 何时不调用工具
+
+### 何时不调用 create_view（直接输出 mermaid 代码块即可）
+
+- 简单流程图（<5 节点）
+- 用户只需查看，无需交互编辑
+- 大多数 AI IDE 已支持 mermaid 代码块渲染，直接输出代码即可
+
+### 何时不调用任何工具
+
+- 用户只是询问 mermaid 语法（如"mermaid 怎么画菱形"）→ 直接回答语法
+- 用户要求修改代码（非流程图相关）→ 直接修改代码
+- 简单的 2 步流程（如"A 然后 B"）→ 直接文字描述即可，无需可视化
 
 ## Mermaid 代码规范
 
@@ -112,7 +127,7 @@ For detailed mermaid syntax reference, consult:
 ### Example Files
 
 Working examples in:
-- **`references/examples.md`** - 7个场景示例（用户画图分析、AI展示、空画布处理、已消费处理、编辑后重读、解析失败重试、主动调用）
+- **`references/examples.md`** - 9个场景示例（用户画图分析、AI展示、空画布处理、已消费处理、编辑后重读、解析失败重试、主动调用、直接输出代码块、服务不可用）
 
 ## 技能协作接口
 

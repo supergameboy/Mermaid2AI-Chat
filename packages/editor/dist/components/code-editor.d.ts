@@ -1,13 +1,9 @@
-/**
- * CodeEditor — Mermaid 代码编辑器（只读，实时同步画布）
- *
- * 职责：显示当前画布序列化后的 Mermaid 代码，辅助用户查看
- * 设计依据：模块3 L145-191 — 左侧面板上为代码编辑器（辅助），实时同步
- */
 interface CodeEditorProps {
     /** Mermaid 代码（由 Canvas 序列化后传入） */
     code: string;
+    /** 应用代码回调（用户点击"应用"时触发，外部负责解析并更新画布） */
+    onApply: (code: string) => void;
 }
-export declare function CodeEditor({ code }: CodeEditorProps): import("react").JSX.Element;
+export declare function CodeEditor({ code, onApply }: CodeEditorProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=code-editor.d.ts.map

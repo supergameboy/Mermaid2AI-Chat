@@ -7,18 +7,7 @@
 import WebSocket from 'ws';
 import type { MermaidEdge, MermaidNode, FlowchartDirection, CanvasSource, Viewport } from '@mermaid-editor/serializer';
 
-// === 消息类型（与服务端一致） ===
-
-export interface WsServerMessage {
-  type: 'canvas_update' | 'consumed_update' | 'create_view' | 'reconnect_sync' | 'viewport_update';
-  payload: unknown;
-  timestamp: number;
-}
-
-export interface WsClientMessage {
-  type: 'canvas_edit' | 'reset_consumed' | 'viewport_edit';
-  payload?: unknown;
-}
+// === 消息类型（与服务端一致，联合类型） ===
 
 export interface CanvasPayload {
   nodes: MermaidNode[];
@@ -32,6 +21,11 @@ export interface ConsumedPayload {
   canvasSource: CanvasSource;
 }
 
+export interface CreateViewPayload {
+  title: string | null;
+  mermaid: string;
+}
+
 export interface ViewportPayload {
   viewport: Viewport;
 }
@@ -42,6 +36,18 @@ export interface ReconnectSyncPayload {
   title: string | null;
   viewport: Viewport;
 }
+
+export type WsServerMessage =
+  | { type: 'canvas_update'; payload: CanvasPayload; timestamp: number }
+  | { type: 'consumed_update'; payload: ConsumedPayload; timestamp: number }
+  | { type: 'create_view'; payload: CreateViewPayload; timestamp: number }
+  | { type: 'reconnect_sync'; payload: ReconnectSyncPayload; timestamp: number }
+  | { type: 'viewport_update'; payload: ViewportPayload; timestamp: number };
+
+export type WsClientMessage =
+  | { type: 'canvas_edit'; payload: CanvasPayload }
+  | { type: 'reset_consumed' }
+  | { type: 'viewport_edit'; payload: ViewportPayload };
 
 export type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
 

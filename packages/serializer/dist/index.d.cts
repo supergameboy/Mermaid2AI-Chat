@@ -72,6 +72,15 @@ interface ConsumedState {
     lastConsumedAt: number | null;
     canvasSource: CanvasSource;
 }
+interface Tab {
+    id: string;
+    title: string | null;
+    canvas: CanvasState;
+    consumed: boolean;
+    canvasSource: CanvasSource;
+    lastConsumedAt: number | null;
+    viewport: Viewport;
+}
 interface ParseSuccessResult {
     success: true;
     canvas: CanvasState;
@@ -213,4 +222,12 @@ declare class IdGenerator {
 /** 全局默认实例 */
 declare const idGenerator: IdGenerator;
 
-export { type CanvasSource, type CanvasState, type ConsumedState, type EdgeMarker, ErrorCollector, type FlowchartDirection, IdGenerator, type MermaidEdge, type MermaidEdgeData, type MermaidEdgeStyle, type MermaidNode, type MermaidNodeData, type MermaidShapeType, type NodeStyle, type ParseError, type ParseFailureResult, type ParseResult, type ParseSuccessResult, type SerializeResult, type Viewport, getEdgeSyntax, getShapeSyntax, idGenerator, parseMermaid, serializeEdge, serializeMermaid, serializeNode, unescapeLabel };
+/**
+ * 为画布节点生成布局位置
+ * @param nodes 节点列表（position 会被原地修改）
+ * @param edges 边列表（只读，用于计算布局）
+ * @param direction 流程图方向
+ */
+declare function layoutCanvas(nodes: MermaidNode[], edges: MermaidEdge[], direction: FlowchartDirection): void;
+
+export { type CanvasSource, type CanvasState, type ConsumedState, type EdgeMarker, ErrorCollector, type FlowchartDirection, IdGenerator, type MermaidEdge, type MermaidEdgeData, type MermaidEdgeStyle, type MermaidNode, type MermaidNodeData, type MermaidShapeType, type NodeStyle, type ParseError, type ParseFailureResult, type ParseResult, type ParseSuccessResult, type SerializeResult, type Tab, type Viewport, getEdgeSyntax, getShapeSyntax, idGenerator, layoutCanvas, parseMermaid, serializeEdge, serializeMermaid, serializeNode, unescapeLabel };

@@ -9,12 +9,6 @@ import type { MermaidNode, MermaidEdge, FlowchartDirection, Viewport } from '@me
 
 type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
 
-interface WsServerMessage {
-  type: 'canvas_update' | 'consumed_update' | 'create_view' | 'reconnect_sync' | 'viewport_update';
-  payload: unknown;
-  timestamp: number;
-}
-
 interface CanvasPayload {
   nodes: MermaidNode[];
   edges: MermaidEdge[];
@@ -25,6 +19,11 @@ interface ConsumedPayload {
   consumed: boolean;
   lastConsumedAt: number | null;
   canvasSource: 'user' | 'ai' | null;
+}
+
+interface CreateViewPayload {
+  title: string | null;
+  mermaid: string;
 }
 
 interface ViewportPayload {
@@ -38,6 +37,13 @@ interface ReconnectSyncPayload {
   viewport: Viewport;
 }
 
+type WsServerMessage =
+  | { type: 'canvas_update'; payload: CanvasPayload; timestamp: number }
+  | { type: 'consumed_update'; payload: ConsumedPayload; timestamp: number }
+  | { type: 'create_view'; payload: CreateViewPayload; timestamp: number }
+  | { type: 'reconnect_sync'; payload: ReconnectSyncPayload; timestamp: number }
+  | { type: 'viewport_update'; payload: ViewportPayload; timestamp: number };
+
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
 
 export function useWebSocket(url: string = 'ws://localhost:14514/ws') {
@@ -49,7 +55,9 @@ export function useWebSocket(url: string = 'ws://localhost:14514/ws') {
   const store = useEditorStore;
 
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    // OPEN 或 CONNECTING 时不需要重连（避免 StrictMode 双次执行创建多个连接）
+    const state = wsRef.current?.readyState;
+    if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return;
 
     try {
       const ws = new WebSocket(url);
@@ -73,14 +81,14 @@ export function useWebSocket(url: string = 'ws://localhost:14514/ws') {
 
         switch (msg.type) {
           case 'canvas_update': {
-            const payload = msg.payload as CanvasPayload;
+            const payload = msg.payload;
             // 服务端画布更新 → 同步到本地（不触发 consumed 重置）
             s.setCanvasSync(payload.nodes, payload.edges, payload.direction);
             break;
           }
 
           case 'consumed_update': {
-            const payload = msg.payload as ConsumedPayload;
+            const payload = msg.payload;
             s.setConsumedSync(payload.consumed, payload.lastConsumedAt, payload.canvasSource);
             break;
           }
@@ -88,21 +96,21 @@ export function useWebSocket(url: string = 'ws://localhost:14514/ws') {
           case 'create_view': {
             // AI 调用 create_view → 画布数据已通过 canvas_update 同步
             // 这里只更新标题
-            const payload = msg.payload as { title?: string | null; mermaid?: string };
-            s.setTitleSync(payload.title ?? null);
+            const payload = msg.payload;
+            s.setTitleSync(payload.title);
             console.log('[WS] create_view 通知, title:', payload.title);
             break;
           }
 
           case 'viewport_update': {
             // 其他客户端的视口变化 → 同步到本地
-            const payload = msg.payload as ViewportPayload;
+            const payload = msg.payload;
             s.setViewportSync(payload.viewport);
             break;
           }
 
           case 'reconnect_sync': {
-            const payload = msg.payload as ReconnectSyncPayload;
+            const payload = msg.payload;
             s.setCanvasSync(payload.canvas.nodes, payload.canvas.edges, payload.canvas.direction);
             s.setConsumedSync(
               payload.consumed.consumed,
@@ -117,6 +125,8 @@ export function useWebSocket(url: string = 'ws://localhost:14514/ws') {
       };
 
       ws.onclose = () => {
+        // 只处理当前 wsRef 指向的连接，避免 StrictMode 双次执行时旧连接覆盖新连接
+        if (wsRef.current !== ws) return;
         setStatus('disconnected');
         wsRef.current = null;
         scheduleReconnect();

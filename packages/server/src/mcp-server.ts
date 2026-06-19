@@ -15,6 +15,7 @@ import { randomUUID } from 'crypto';
 import { registerCreateViewTool } from './tools/create-view.js';
 import { registerGetInputTool } from './tools/get-input.js';
 import { WsServer } from './ws-server.js';
+import { useEditorStore } from './store.js';
 
 export interface ServerOptions {
   port?: number;
@@ -142,6 +143,20 @@ export async function startServer(options: ServerOptions = {}): Promise<void> {
   // 健康检查
   app.get('/health', (req, res) => {
     res.json({ status: 'ok', service: 'mermaid-editor', sessions: sessions.size });
+  });
+
+  // 重置 Store（测试隔离用）
+  app.post('/reset', (req, res) => {
+    const store = useEditorStore.getState();
+    store.setCanvas({ nodes: [], edges: [], direction: 'TD' });
+    store.setConsumed(false);
+    store.setCanvasSource(null);
+    store.setLastConsumedAt(null);
+    store.setTitle(null);
+    store.setViewport({ x: 0, y: 0, zoom: 1 });
+    wsServer.broadcastCanvasUpdate({ nodes: [], edges: [], direction: 'TD' });
+    wsServer.broadcastConsumedPayload({ consumed: false, lastConsumedAt: null, canvasSource: null });
+    res.json({ success: true });
   });
 
   // 启动服务器

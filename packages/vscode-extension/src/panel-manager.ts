@@ -8,7 +8,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { WsClient, type WsServerMessage, type WsClientMessage, type ConnectionStatus } from './ws-client.js';
+import { WsClient, type WsServerMessage, type WsClientMessage, type ConnectionStatus, type CanvasPayload, type ViewportPayload } from './ws-client.js';
 import type { MermaidEdge, MermaidNode, FlowchartDirection, CanvasSource, Viewport } from '@mermaid-editor/serializer';
 
 // === Webview ↔ Extension 消息类型 ===
@@ -81,7 +81,7 @@ export class PanelManager {
   private handleServerMessage(msg: WsServerMessage): void {
     switch (msg.type) {
       case 'canvas_update': {
-        const payload = msg.payload as { nodes: MermaidNode[]; edges: MermaidEdge[]; direction: FlowchartDirection };
+        const payload = msg.payload;
         this.state.nodes = payload.nodes;
         this.state.edges = payload.edges;
         this.state.direction = payload.direction;
@@ -89,7 +89,7 @@ export class PanelManager {
         break;
       }
       case 'consumed_update': {
-        const payload = msg.payload as { consumed: boolean; lastConsumedAt: number | null; canvasSource: CanvasSource };
+        const payload = msg.payload;
         this.state.consumed = payload.consumed;
         this.state.lastConsumedAt = payload.lastConsumedAt;
         this.state.canvasSource = payload.canvasSource;
@@ -97,26 +97,21 @@ export class PanelManager {
         break;
       }
       case 'create_view': {
-        const payload = msg.payload as { title?: string | null; mermaid?: string };
-        this.state.title = payload.title ?? null;
+        const payload = msg.payload;
+        this.state.title = payload.title;
         this.postMessage({ type: 'create_view', payload });
         // 自动聚焦面板
         this.panel?.reveal(vscode.ViewColumn.Active);
         break;
       }
       case 'viewport_update': {
-        const payload = msg.payload as { viewport: Viewport };
+        const payload = msg.payload;
         this.state.viewport = payload.viewport;
         this.postMessage({ type: 'viewport_update', payload });
         break;
       }
       case 'reconnect_sync': {
-        const payload = msg.payload as {
-          canvas: { nodes: MermaidNode[]; edges: MermaidEdge[]; direction: FlowchartDirection };
-          consumed: { consumed: boolean; lastConsumedAt: number | null; canvasSource: CanvasSource };
-          title: string | null;
-          viewport: Viewport;
-        };
+        const payload = msg.payload;
         this.state.nodes = payload.canvas.nodes;
         this.state.edges = payload.canvas.edges;
         this.state.direction = payload.canvas.direction;
@@ -186,10 +181,18 @@ export class PanelManager {
   }
 
   private handleWebviewMessage(msg: WebviewMessage): void {
-    const wsMsg: WsClientMessage = {
-      type: msg.type,
-      payload: msg.payload,
-    };
+    let wsMsg: WsClientMessage;
+    switch (msg.type) {
+      case 'canvas_edit':
+        wsMsg = { type: 'canvas_edit', payload: msg.payload as CanvasPayload };
+        break;
+      case 'reset_consumed':
+        wsMsg = { type: 'reset_consumed' };
+        break;
+      case 'viewport_edit':
+        wsMsg = { type: 'viewport_edit', payload: msg.payload as ViewportPayload };
+        break;
+    }
     this.wsClient.send(wsMsg);
   }
 

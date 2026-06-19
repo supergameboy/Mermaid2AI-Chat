@@ -26,7 +26,7 @@ export interface EditorStore extends CanvasState, ConsumedState {
   // 消费状态操作
   setConsumed: (consumed: boolean) => void;
   setCanvasSource: (source: CanvasSource) => void;
-  setLastConsumedAt: (timestamp: number) => void;
+  setLastConsumedAt: (timestamp: number | null) => void;
   resetConsumed: () => void;
 
   // 标题操作

@@ -39,3 +39,4 @@ export { serializeEdge, getEdgeSyntax } from './edge-serializer.js';
 // 工具导出
 export { IdGenerator, idGenerator } from './id-generator.js';
 export { ErrorCollector } from './error-collector.js';
+export { layoutCanvas } from './layout.js';

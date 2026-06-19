@@ -140,7 +140,7 @@ describe('WsServer', () => {
       expect(msg.payload.nodes[0].id).toBe('n1');
     });
 
-    it('should reset consumed on canvas_edit', async () => {
+    it('should reset consumed on canvas_edit [TC-3.9b]', async () => {
       // 先标记为已消费
       useEditorStore.getState().setConsumed(true);
       useEditorStore.getState().setCanvasSource('ai');

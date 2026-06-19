@@ -1,4 +1,5 @@
-/** 节点库 — 14种形状，点击添加到画布 */
+/** 节点库 — 14种形状，支持点击添加和拖拽到画布 */
+import type { DragEvent } from 'react';
 import type { MermaidShapeType } from '@mermaid-editor/serializer';
 
 interface NodeLibraryProps {
@@ -25,6 +26,12 @@ const SHAPES: { type: MermaidShapeType; label: string; icon: string }[] = [
 ];
 
 export function NodeLibrary({ onAddNode }: NodeLibraryProps) {
+  // 拖拽开始：将形状类型写入 dataTransfer
+  const handleDragStart = (e: DragEvent<HTMLButtonElement>, shape: MermaidShapeType) => {
+    e.dataTransfer.setData('application/mermaid-shape', shape);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
   return (
     <div className="node-library">
       <h3 className="library-title">节点库</h3>
@@ -33,8 +40,10 @@ export function NodeLibrary({ onAddNode }: NodeLibraryProps) {
           <button
             key={shape.type}
             className="node-item"
+            draggable
+            onDragStart={(e) => handleDragStart(e, shape.type)}
             onClick={() => onAddNode(shape.type)}
-            title={`添加${shape.label}`}
+            title={`点击添加或拖拽到画布：${shape.label}`}
           >
             <span className="node-icon">{shape.icon}</span>
             <span className="node-label">{shape.label}</span>

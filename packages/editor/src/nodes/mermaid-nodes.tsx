@@ -21,7 +21,7 @@ export const MermaidNodeComponent = memo(({ data, selected }: NodeProps<MermaidF
   const color = style?.color ?? '#333';
 
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}>
+    <div className="mermaid-node" style={{ position: 'relative', display: 'inline-block' }}>
       <Handle type="target" position={Position.Top} style={handleStyle} />
       <Handle type="target" position={Position.Left} style={handleStyle} />
       <ShapeRenderer shape={shape} label={data.label} stroke={stroke} fill={fill} color={color} selected={selected} />

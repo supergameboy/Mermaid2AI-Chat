@@ -1,7 +1,9 @@
 "use strict";
+var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __export = (target, all) => {
   for (var name in all)
@@ -15,6 +17,14 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // src/index.ts
@@ -25,6 +35,7 @@ __export(src_exports, {
   getEdgeSyntax: () => getEdgeSyntax,
   getShapeSyntax: () => getShapeSyntax,
   idGenerator: () => idGenerator,
+  layoutCanvas: () => layoutCanvas,
   parseMermaid: () => parseMermaid,
   serializeEdge: () => serializeEdge,
   serializeMermaid: () => serializeMermaid,
@@ -137,7 +148,69 @@ var IdGenerator = class {
 };
 var idGenerator = new IdGenerator();
 
-// src/parser.ts
+// src/layout.ts
+var import_dagre = __toESM(require("dagre"), 1);
+var LAYOUT_CONFIG = {
+  rankdir: "TB",
+  // 默认从上到下，由 direction 覆盖
+  nodesep: 60,
+  // 同层节点间距
+  ranksep: 80,
+  // 层间距
+  marginx: 40,
+  // 水平边距
+  marginy: 40
+  // 垂直边距
+};
+var NODE_SIZE = {
+  width: 140,
+  height: 50
+};
+var DIRECTION_MAP = {
+  TB: "TB",
+  TD: "TB",
+  // TD 等同于 TB
+  BT: "BT",
+  LR: "LR",
+  RL: "RL"
+};
+function layoutCanvas(nodes, edges, direction) {
+  if (nodes.length === 0) {
+    return;
+  }
+  const graph = new import_dagre.default.graphlib.Graph();
+  graph.setGraph({
+    ...LAYOUT_CONFIG,
+    rankdir: DIRECTION_MAP[direction] ?? "TB"
+  });
+  graph.setDefaultEdgeLabel(() => ({}));
+  for (const node of nodes) {
+    graph.setNode(node.id, {
+      width: node.width ?? NODE_SIZE.width,
+      height: node.height ?? NODE_SIZE.height
+    });
+  }
+  for (const edge of edges) {
+    graph.setEdge(edge.source, edge.target);
+  }
+  import_dagre.default.layout(graph);
+  for (const node of nodes) {
+    const dagreNode = graph.node(node.id);
+    if (dagreNode) {
+      const width = node.width ?? NODE_SIZE.width;
+      const height = node.height ?? NODE_SIZE.height;
+      node.position = {
+        x: dagreNode.x - width / 2,
+        y: dagreNode.y - height / 2
+      };
+    }
+  }
+}
+
+// src/ast-mapper.ts
+function isFlowchartAST(ast) {
+  return typeof ast === "object" && ast !== null && "type" in ast && "direction" in ast && "nodes" in ast && "edges" in ast;
+}
 var SHAPE_MAP = {
   rect: "rect",
   round: "rounded",
@@ -161,6 +234,13 @@ var SHAPE_MAP = {
   rounded: "rounded",
   square: "rect",
   rectangle: "rect"
+};
+var DIRECTION_MAP2 = {
+  TB: "TB",
+  TD: "TD",
+  BT: "BT",
+  RL: "RL",
+  LR: "LR"
 };
 function fixUnsupportedNodeShapes(source, astNodes) {
   const patterns = [
@@ -243,127 +323,6 @@ function fixUnsupportedEdgeStyles(source, astEdges, astNodes) {
   }
   return fixedLines;
 }
-var DIRECTION_MAP = {
-  TB: "TB",
-  TD: "TD",
-  BT: "BT",
-  RL: "RL",
-  LR: "LR"
-};
-function parseMermaid(source, errorCollector) {
-  const errors = errorCollector ?? new ErrorCollector();
-  const idGen = new IdGenerator();
-  let result;
-  try {
-    result = (0, import_mermaid_parser.parse)(source);
-  } catch (e) {
-    errors.addError(0, 0, `\u89E3\u6790\u5931\u8D25: ${e instanceof Error ? e.message : String(e)}`);
-    return {
-      success: false,
-      canvas: { nodes: [], edges: [], direction: "TD" },
-      errors: errors.getErrors()
-    };
-  }
-  if (!result.ast) {
-    if (result.diagnostics) {
-      for (const diag of result.diagnostics) {
-        const line = diag.span?.start?.line ?? 0;
-        const column = diag.span?.start?.column ?? 0;
-        if (diag.severity === "error") {
-          errors.addError(line, column, diag.message);
-        } else {
-          errors.addWarning(line, column, diag.message);
-        }
-      }
-    }
-    return {
-      success: false,
-      canvas: { nodes: [], edges: [], direction: "TD" },
-      errors: errors.getErrors()
-    };
-  }
-  const ast = result.ast;
-  const direction = DIRECTION_MAP[ast.direction] ?? "TD";
-  const astNodes = ast.nodes;
-  const astEdges = ast.edges;
-  if (astNodes) {
-    fixUnsupportedNodeShapes(source, astNodes);
-  }
-  const fixedLines = astEdges && astNodes ? fixUnsupportedEdgeStyles(source, astEdges, astNodes) : /* @__PURE__ */ new Set();
-  if (result.diagnostics) {
-    for (const diag of result.diagnostics) {
-      const line = diag.span?.start?.line ?? 0;
-      const column = diag.span?.start?.column ?? 0;
-      if (fixedLines.has(line) && diag.message.includes("Skipping unrecognized line")) {
-        continue;
-      }
-      if (diag.severity === "error") {
-        errors.addError(line, column, diag.message);
-      } else {
-        errors.addWarning(line, column, diag.message);
-      }
-    }
-  }
-  const nodes = [];
-  const nodeIdMap = /* @__PURE__ */ new Map();
-  if (astNodes) {
-    for (const [originalId] of astNodes) {
-      idGen.register(originalId);
-    }
-  }
-  let nodeIndex = 0;
-  if (astNodes) {
-    for (const [originalId, astNode] of astNodes) {
-      const shape = SHAPE_MAP[astNode.shape] ?? "rect";
-      const canvasId = originalId;
-      nodeIdMap.set(originalId, canvasId);
-      const col = nodeIndex % 3;
-      const row = Math.floor(nodeIndex / 3);
-      const position = { x: col * 200, y: row * 120 };
-      nodes.push({
-        id: canvasId,
-        type: shape,
-        position,
-        data: {
-          label: astNode.label || originalId,
-          shape
-        }
-      });
-      nodeIndex++;
-    }
-  }
-  const edges = [];
-  if (astEdges) {
-    let edgeIndex = 0;
-    for (const astEdge of astEdges) {
-      const sourceId = nodeIdMap.get(astEdge.source);
-      const targetId = nodeIdMap.get(astEdge.target);
-      if (!sourceId || !targetId) {
-        errors.addWarning(0, 0, `\u8FB9\u5F15\u7528\u4E86\u4E0D\u5B58\u5728\u7684\u8282\u70B9: ${astEdge.source} \u2192 ${astEdge.target}`);
-        continue;
-      }
-      const edgeStyle = mapEdgeStyle(astEdge);
-      edges.push({
-        id: `edge-${edgeIndex}`,
-        source: sourceId,
-        target: targetId,
-        type: "smoothstep",
-        data: {
-          edgeStyle,
-          label: astEdge.label
-        },
-        markerEnd: astEdge.hasArrowEnd ? { type: "arrowclosed" } : void 0,
-        markerStart: astEdge.hasArrowStart ? { type: "arrowclosed" } : void 0
-      });
-      edgeIndex++;
-    }
-  }
-  return {
-    success: !errors.hasErrors(),
-    canvas: { nodes, edges, direction },
-    errors: errors.getErrors()
-  };
-}
 function mapEdgeStyle(astEdge) {
   const style = astEdge.style;
   const hasArrowStart = astEdge.hasArrowStart;
@@ -402,6 +361,130 @@ function mapEdgeStyle(astEdge) {
     return "arrow";
   }
   return "arrow";
+}
+
+// src/parser.ts
+function parseMermaid(source, errorCollector) {
+  const errors = errorCollector ?? new ErrorCollector();
+  const idGen = new IdGenerator();
+  let result;
+  try {
+    result = (0, import_mermaid_parser.parse)(source);
+  } catch (e) {
+    errors.addError(0, 0, `\u89E3\u6790\u5931\u8D25: ${e instanceof Error ? e.message : String(e)}`);
+    return {
+      success: false,
+      canvas: { nodes: [], edges: [], direction: "TD" },
+      errors: errors.getErrors()
+    };
+  }
+  if (!result.ast) {
+    if (result.diagnostics) {
+      for (const diag of result.diagnostics) {
+        const line = diag.span?.start?.line ?? 0;
+        const column = diag.span?.start?.column ?? 0;
+        if (diag.severity === "error") {
+          errors.addError(line, column, diag.message);
+        } else {
+          errors.addWarning(line, column, diag.message);
+        }
+      }
+    }
+    return {
+      success: false,
+      canvas: { nodes: [], edges: [], direction: "TD" },
+      errors: errors.getErrors()
+    };
+  }
+  if (!isFlowchartAST(result.ast)) {
+    if (result.diagnostics) {
+      for (const diag of result.diagnostics) {
+        const line = diag.span?.start?.line ?? 0;
+        const column = diag.span?.start?.column ?? 0;
+        if (diag.severity === "error") {
+          errors.addError(line, column, diag.message);
+        } else {
+          errors.addWarning(line, column, diag.message);
+        }
+      }
+    }
+    errors.addError(0, 0, "\u89E3\u6790\u7ED3\u679C\u4E0D\u662F flowchart \u7C7B\u578B");
+    return {
+      success: false,
+      canvas: { nodes: [], edges: [], direction: "TD" },
+      errors: errors.getErrors()
+    };
+  }
+  const ast = result.ast;
+  const direction = DIRECTION_MAP2[ast.direction] ?? "TD";
+  const astNodes = ast.nodes;
+  const astEdges = ast.edges;
+  fixUnsupportedNodeShapes(source, astNodes);
+  const fixedLines = fixUnsupportedEdgeStyles(source, astEdges, astNodes);
+  if (result.diagnostics) {
+    for (const diag of result.diagnostics) {
+      const line = diag.span?.start?.line ?? 0;
+      const column = diag.span?.start?.column ?? 0;
+      if (fixedLines.has(line) && diag.message.includes("Skipping unrecognized line")) {
+        continue;
+      }
+      if (diag.severity === "error") {
+        errors.addError(line, column, diag.message);
+      } else {
+        errors.addWarning(line, column, diag.message);
+      }
+    }
+  }
+  const nodes = [];
+  const nodeIdMap = /* @__PURE__ */ new Map();
+  for (const [originalId] of astNodes) {
+    idGen.register(originalId);
+  }
+  for (const [originalId, astNode] of astNodes) {
+    const shape = SHAPE_MAP[astNode.shape] ?? "rect";
+    const canvasId = originalId;
+    nodeIdMap.set(originalId, canvasId);
+    const position = { x: 0, y: 0 };
+    nodes.push({
+      id: canvasId,
+      type: shape,
+      position,
+      data: {
+        label: astNode.label || originalId,
+        shape
+      }
+    });
+  }
+  const edges = [];
+  let edgeIndex = 0;
+  for (const astEdge of astEdges) {
+    const sourceId = nodeIdMap.get(astEdge.source);
+    const targetId = nodeIdMap.get(astEdge.target);
+    if (!sourceId || !targetId) {
+      errors.addWarning(0, 0, `\u8FB9\u5F15\u7528\u4E86\u4E0D\u5B58\u5728\u7684\u8282\u70B9: ${astEdge.source} \u2192 ${astEdge.target}`);
+      continue;
+    }
+    const edgeStyle = mapEdgeStyle(astEdge);
+    edges.push({
+      id: `e${edgeIndex + 1}`,
+      source: sourceId,
+      target: targetId,
+      type: "smoothstep",
+      data: {
+        edgeStyle,
+        label: astEdge.label
+      },
+      markerEnd: astEdge.hasArrowEnd ? { type: "arrowclosed" } : void 0,
+      markerStart: astEdge.hasArrowStart ? { type: "arrowclosed" } : void 0
+    });
+    edgeIndex++;
+  }
+  layoutCanvas(nodes, edges, direction);
+  return {
+    success: !errors.hasErrors(),
+    canvas: { nodes, edges, direction },
+    errors: errors.getErrors()
+  };
 }
 
 // src/node-serializer.ts
@@ -510,6 +593,7 @@ function serializeMermaid(canvas) {
   getEdgeSyntax,
   getShapeSyntax,
   idGenerator,
+  layoutCanvas,
   parseMermaid,
   serializeEdge,
   serializeMermaid,

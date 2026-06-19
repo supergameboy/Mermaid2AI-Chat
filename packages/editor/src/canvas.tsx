@@ -181,12 +181,93 @@ function CanvasInner(props: CanvasProps) {
           shape,
         },
       };
-      setNodes((nds) => [...nds, newNode]);
-      setTimeout(() => {
-        onCanvasEdit(getCanvasSnapshot());
-      }, 0);
+      // 在 setNodes 回调中获取最新 nodes，避免 ref 时序问题
+      setNodes((nds) => {
+        const newNodes = [...nds, newNode];
+        setTimeout(() => {
+          onCanvasEdit({
+            nodes: newNodes,
+            edges: edgesRef.current,
+            direction: directionRef.current,
+          });
+        }, 0);
+        return newNodes;
+      });
     },
-    [setNodes, onCanvasEdit, getCanvasSnapshot]
+    [setNodes, onCanvasEdit]
+  );
+
+  // 拖拽放置：从节点库拖拽节点到画布
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      const shape = event.dataTransfer.getData('application/mermaid-shape') as MermaidShapeType;
+      if (!shape) return;
+
+      // 屏幕坐标 → 画布坐标
+      const position = reactFlow.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      const newNode: MermaidNode = {
+        id: generateNodeId(),
+        type: shape,
+        position,
+        data: { label: '新节点', shape },
+      };
+      setNodes((nds) => {
+        const newNodes = [...nds, newNode];
+        setTimeout(() => {
+          onCanvasEdit({
+            nodes: newNodes,
+            edges: edgesRef.current,
+            direction: directionRef.current,
+          });
+        }, 0);
+        return newNodes;
+      });
+    },
+    [reactFlow, setNodes, onCanvasEdit]
+  );
+
+  // 拖拽悬停：允许放置
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  // 双击画布空白处 → 创建矩形节点
+  // React Flow 无 onPaneDoubleClick，用外层 div 的 onDoubleClick + 判断 target 实现
+  const onCanvasDoubleClick = useCallback(
+    (event: React.MouseEvent) => {
+      // 只在点击画布背景（.react-flow__pane）时触发，避免双击节点/边时误触
+      const target = event.target as HTMLElement;
+      if (!target.classList.contains('react-flow__pane')) return;
+
+      const position = reactFlow.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      const newNode: MermaidNode = {
+        id: generateNodeId(),
+        type: 'rect',
+        position,
+        data: { label: '新节点', shape: 'rect' },
+      };
+      setNodes((nds) => {
+        const newNodes = [...nds, newNode];
+        setTimeout(() => {
+          onCanvasEdit({
+            nodes: newNodes,
+            edges: edgesRef.current,
+            direction: directionRef.current,
+          });
+        }, 0);
+        return newNodes;
+      });
+    },
+    [reactFlow, setNodes, onCanvasEdit]
   );
 
   // 双击节点 → 进入编辑模式
@@ -307,6 +388,7 @@ function CanvasInner(props: CanvasProps) {
       {/* 顶部工具栏 */}
       <Toolbar
         direction={syncDirection}
+        mermaidCode={mermaidCode}
         onDirectionChange={(dir) => {
           directionRef.current = dir;
           onDirectionChange(dir);
@@ -322,7 +404,7 @@ function CanvasInner(props: CanvasProps) {
         </div>
 
         {/* 画布 */}
-        <div className="canvas-container">
+        <div className="canvas-container" onDoubleClick={onCanvasDoubleClick}>
           {/* 自定义 SVG marker 定义 — 边样式端点形状 */}
           <svg width="0" height="0" style={{ position: 'absolute' }}>
             <defs>
@@ -374,6 +456,8 @@ function CanvasInner(props: CanvasProps) {
             onEdgeDoubleClick={onEdgeDoubleClick}
             onSelectionChange={onSelectionChange}
             onMove={onMove}
+            onDrop={onDrop}
+            onDragOver={onDragOver}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             deleteKeyCode={null}

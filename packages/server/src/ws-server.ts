@@ -14,45 +14,48 @@ import type { MermaidEdge, MermaidNode, FlowchartDirection, Viewport } from '@me
 import { useEditorStore } from './store.js';
 import { consumedReducer } from './consumed-state-machine.js';
 
-// === 消息类型 ===
-export interface WsServerMessage {
-  type: 'canvas_update' | 'consumed_update' | 'create_view' | 'reconnect_sync' | 'viewport_update';
-  payload: unknown;
-  timestamp: number;
-}
+// === 消息类型（联合类型，类型安全） ===
 
-export interface WsClientMessage {
-  type: 'canvas_edit' | 'reset_consumed' | 'subscribe' | 'viewport_edit';
-  payload?: unknown;
-}
-
-interface CanvasPayload {
+export interface CanvasPayload {
   nodes: MermaidNode[];
   edges: MermaidEdge[];
   direction: FlowchartDirection;
 }
 
-interface ConsumedPayload {
+export interface ConsumedPayload {
   consumed: boolean;
   lastConsumedAt: number | null;
   canvasSource: 'user' | 'ai' | null;
 }
 
-interface CreateViewPayload {
-  title?: string;
+export interface CreateViewPayload {
+  title: string | null;
   mermaid: string;
 }
 
-interface ViewportPayload {
+export interface ViewportPayload {
   viewport: Viewport;
 }
 
-interface ReconnectSyncPayload {
+export interface ReconnectSyncPayload {
   canvas: CanvasPayload;
   consumed: ConsumedPayload;
   title: string | null;
   viewport: Viewport;
 }
+
+export type WsServerMessage =
+  | { type: 'canvas_update'; payload: CanvasPayload; timestamp: number }
+  | { type: 'consumed_update'; payload: ConsumedPayload; timestamp: number }
+  | { type: 'create_view'; payload: CreateViewPayload; timestamp: number }
+  | { type: 'reconnect_sync'; payload: ReconnectSyncPayload; timestamp: number }
+  | { type: 'viewport_update'; payload: ViewportPayload; timestamp: number };
+
+export type WsClientMessage =
+  | { type: 'canvas_edit'; payload: CanvasPayload }
+  | { type: 'reset_consumed' }
+  | { type: 'subscribe' }
+  | { type: 'viewport_edit'; payload: ViewportPayload };
 
 export class WsServer {
   private wss: WebSocketServer;
@@ -103,7 +106,7 @@ export class WsServer {
     switch (msg.type) {
       case 'canvas_edit': {
         // 用户编辑画布 → 更新 Store + 触发 CANVAS_EDIT 事件
-        const payload = msg.payload as CanvasPayload;
+        const payload = msg.payload;
         store.setCanvas({ nodes: payload.nodes, edges: payload.edges, direction: payload.direction });
 
         // CANVAS_EDIT 事件重置 consumed（修复后的状态机）
@@ -144,7 +147,7 @@ export class WsServer {
 
       case 'viewport_edit': {
         // 用户平移/缩放画布 → 更新 Store（不重置 consumed）+ 广播给其他客户端
-        const payload = msg.payload as ViewportPayload;
+        const payload = msg.payload;
         store.setViewport(payload.viewport);
 
         // 广播给其他客户端（与 canvas_update 一致，避免回传给发起方）
@@ -176,7 +179,7 @@ export class WsServer {
     });
     this.broadcast({
       type: 'create_view',
-      payload: { ...payload, title: payload.title ?? null },
+      payload,
       timestamp: Date.now(),
     });
   }
@@ -188,6 +191,28 @@ export class WsServer {
     this.broadcast({
       type: 'consumed_update',
       payload: useEditorStore.getState().getConsumedState(),
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * 广播画布更新（供 /reset 端点等外部调用）
+   */
+  broadcastCanvasUpdate(payload: CanvasPayload): void {
+    this.broadcast({
+      type: 'canvas_update',
+      payload,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * 广播消费状态（供 /reset 端点等外部调用）
+   */
+  broadcastConsumedPayload(payload: ConsumedPayload): void {
+    this.broadcast({
+      type: 'consumed_update',
+      payload,
       timestamp: Date.now(),
     });
   }

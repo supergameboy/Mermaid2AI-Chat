@@ -1,5 +1,5 @@
 /** 属性面板 — 选中节点/边时显示属性编辑 */
-import type { MermaidNode, MermaidEdge, MermaidShapeType, MermaidEdgeStyle } from '@mermaid-editor/serializer';
+import type { MermaidNode, MermaidEdge, MermaidShapeType, MermaidEdgeStyle, NodeStyle } from '@mermaid-editor/serializer';
 
 interface PropertyPanelProps {
   selectedNode: MermaidNode | null;
@@ -75,6 +75,47 @@ export function PropertyPanel({ selectedNode, selectedEdge, onUpdateNode, onUpda
               ))}
             </select>
           </label>
+          <div className="panel-section-title">样式</div>
+          <label className="panel-label panel-color-row">
+            填充色
+            <input
+              className="panel-color"
+              type="color"
+              value={selectedNode.data.style?.fill ?? '#ffffff'}
+              onChange={(e) => onUpdateNode(selectedNode.id, {
+                style: { ...selectedNode.data.style, fill: e.target.value } as NodeStyle,
+              })}
+            />
+          </label>
+          <label className="panel-label panel-color-row">
+            边框色
+            <input
+              className="panel-color"
+              type="color"
+              value={selectedNode.data.style?.stroke ?? '#333333'}
+              onChange={(e) => onUpdateNode(selectedNode.id, {
+                style: { ...selectedNode.data.style, stroke: e.target.value } as NodeStyle,
+              })}
+            />
+          </label>
+          <label className="panel-label panel-color-row">
+            文字色
+            <input
+              className="panel-color"
+              type="color"
+              value={selectedNode.data.style?.color ?? '#333333'}
+              onChange={(e) => onUpdateNode(selectedNode.id, {
+                style: { ...selectedNode.data.style, color: e.target.value } as NodeStyle,
+              })}
+            />
+          </label>
+          <button
+            className="panel-reset-btn"
+            type="button"
+            onClick={() => onUpdateNode(selectedNode.id, { style: undefined })}
+          >
+            重置样式
+          </button>
           <div className="panel-info">
             <span className="info-label">ID:</span>
             <span className="info-value">{selectedNode.id}</span>

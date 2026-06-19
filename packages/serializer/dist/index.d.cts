@@ -179,21 +179,36 @@ declare class IdGenerator {
     private counter;
     private usedIds;
     /**
-     * 生成下一个短 ID
+     * 生成新的唯一短 ID
+     * 规则：A, B, C, ... Z, AA, AB, ... AZ, BA, ... ZZ, AAA, ...
      */
-    next(): string;
+    generate(): string;
     /**
-     * 预注册已存在的 ID（解析时保留原始 ID）
+     * 注册已存在的 ID，避免后续 generate() 生成重复
      */
     register(id: string): void;
     /**
-     * 重置生成器
+     * 批量注册已存在的 ID
+     */
+    registerMany(ids: string[]): void;
+    /**
+     * 检查 ID 是否已被使用
+     */
+    isUsed(id: string): boolean;
+    /**
+     * 重置生成器（清空已用 ID 集合和计数器）
      */
     reset(): void;
     /**
-     * 26 进制编码（A=0, B=1, ... Z=25, AA=26, AB=27...）
+     * 获取所有已注册 ID（只读视图，返回副本避免外部修改）
      */
-    private encode;
+    getUsedIds(): Set<string>;
+    /**
+     * 序号 → 字母 ID
+     * 0→A, 1→B, ... 25→Z, 26→AA, 27→AB, ...
+     * 算法：26 进制，但无"0"位，所以是双射计数（bijective base-26）
+     */
+    private indexToId;
 }
 /** 全局默认实例 */
 declare const idGenerator: IdGenerator;

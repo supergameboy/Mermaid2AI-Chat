@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseMermaid, serializeMermaid } from './index.js';
-import { ErrorCollectorImpl } from './error-collector.js';
+import { ErrorCollector as ErrorCollectorImpl } from './error-collector.js';
 
 describe('parser — AST 原始 ID 保留', () => {
   it('should preserve original node IDs from mermaid code', () => {
@@ -91,5 +91,212 @@ describe('parser — AST 原始 ID 保留', () => {
       expect(edge.source).toMatch(/^[A-Z]+$/);
       expect(edge.target).toMatch(/^[A-Z]+$/);
     }
+  });
+});
+
+describe('parser — 方向解析', () => {
+  it('should parse TD direction', () => {
+    const result = parseMermaid('flowchart TD\n  A --> B');
+    expect(result.success).toBe(true);
+    expect(result.canvas.direction).toBe('TD');
+  });
+
+  it('should parse TB direction (alias of TD)', () => {
+    const result = parseMermaid('flowchart TB\n  A --> B');
+    expect(result.success).toBe(true);
+    expect(result.canvas.direction).toBe('TB');
+  });
+
+  it('should parse BT direction', () => {
+    const result = parseMermaid('flowchart BT\n  A --> B');
+    expect(result.success).toBe(true);
+    expect(result.canvas.direction).toBe('BT');
+  });
+
+  it('should parse RL direction', () => {
+    const result = parseMermaid('flowchart RL\n  A --> B');
+    expect(result.success).toBe(true);
+    expect(result.canvas.direction).toBe('RL');
+  });
+
+  it('should parse LR direction', () => {
+    const result = parseMermaid('flowchart LR\n  A --> B');
+    expect(result.success).toBe(true);
+    expect(result.canvas.direction).toBe('LR');
+  });
+});
+
+describe('parser — 14种节点形状解析', () => {
+  it('should parse rect shape', () => {
+    const result = parseMermaid('flowchart TD\n  A[文本]');
+    expect(result.canvas.nodes[0].data.shape).toBe('rect');
+  });
+
+  it('should parse rounded shape', () => {
+    const result = parseMermaid('flowchart TD\n  A(文本)');
+    expect(result.canvas.nodes[0].data.shape).toBe('rounded');
+  });
+
+  it('should parse stadium shape', () => {
+    const result = parseMermaid('flowchart TD\n  A([文本])');
+    expect(result.canvas.nodes[0].data.shape).toBe('stadium');
+  });
+
+  it('should parse diamond shape', () => {
+    const result = parseMermaid('flowchart TD\n  A{文本}');
+    expect(result.canvas.nodes[0].data.shape).toBe('diamond');
+  });
+
+  it('should parse circle shape', () => {
+    const result = parseMermaid('flowchart TD\n  A((文本))');
+    expect(result.canvas.nodes[0].data.shape).toBe('circle');
+  });
+
+  it('should parse cylinder shape', () => {
+    const result = parseMermaid('flowchart TD\n  A[(文本)]');
+    expect(result.canvas.nodes[0].data.shape).toBe('cylinder');
+  });
+
+  it('should parse hexagon shape', () => {
+    const result = parseMermaid('flowchart TD\n  A{{文本}}');
+    expect(result.canvas.nodes[0].data.shape).toBe('hexagon');
+  });
+
+  it('should parse subroutine shape', () => {
+    const result = parseMermaid('flowchart TD\n  A[[文本]]');
+    expect(result.canvas.nodes[0].data.shape).toBe('subroutine');
+  });
+
+  it('should parse doublecircle shape', () => {
+    const result = parseMermaid('flowchart TD\n  A(((文本)))');
+    expect(result.canvas.nodes[0].data.shape).toBe('doublecircle');
+  });
+
+  it('should parse asymmetric shape', () => {
+    const result = parseMermaid('flowchart TD\n  A>文本]');
+    expect(result.canvas.nodes[0].data.shape).toBe('asymmetric');
+  });
+
+  it('should parse parallelogram shape (fixUnsupportedNodeShapes)', () => {
+    const result = parseMermaid('flowchart TD\n  A[/文本/]');
+    expect(result.canvas.nodes[0].data.shape).toBe('parallelogram');
+  });
+
+  it('should parse parallelogram-reverse shape (fixUnsupportedNodeShapes)', () => {
+    const result = parseMermaid('flowchart TD\n  A[\\文本\\]');
+    expect(result.canvas.nodes[0].data.shape).toBe('parallelogram-reverse');
+  });
+
+  it('should parse trapezoid shape', () => {
+    const result = parseMermaid('flowchart TD\n  A[/文本\\]');
+    expect(result.canvas.nodes[0].data.shape).toBe('trapezoid');
+  });
+
+  it('should parse trapezoid-reverse shape', () => {
+    const result = parseMermaid('flowchart TD\n  A[\\文本/]');
+    expect(result.canvas.nodes[0].data.shape).toBe('trapezoid-reverse');
+  });
+});
+
+describe('parser — 8种边样式解析', () => {
+  it('should parse arrow edge style', () => {
+    const result = parseMermaid('flowchart TD\n  A --> B');
+    expect(result.canvas.edges[0].data.edgeStyle).toBe('arrow');
+  });
+
+  it('should parse line edge style', () => {
+    const result = parseMermaid('flowchart TD\n  A --- B');
+    expect(result.canvas.edges[0].data.edgeStyle).toBe('line');
+  });
+
+  it('should parse dotted edge style', () => {
+    const result = parseMermaid('flowchart TD\n  A -.- B');
+    expect(result.canvas.edges[0].data.edgeStyle).toBe('dotted');
+  });
+
+  it('should parse dotted-arrow edge style', () => {
+    const result = parseMermaid('flowchart TD\n  A -.-> B');
+    expect(result.canvas.edges[0].data.edgeStyle).toBe('dotted-arrow');
+  });
+
+  it('should parse thick edge style', () => {
+    const result = parseMermaid('flowchart TD\n  A ==> B');
+    expect(result.canvas.edges[0].data.edgeStyle).toBe('thick');
+  });
+
+  it('should parse circle edge style (fixUnsupportedEdgeStyles)', () => {
+    const result = parseMermaid('flowchart TD\n  A ---o B');
+    expect(result.success).toBe(true);
+    expect(result.canvas.edges[0].data.edgeStyle).toBe('circle');
+    expect(result.canvas.edges[0].source).toBe('A');
+    expect(result.canvas.edges[0].target).toBe('B');
+  });
+
+  it('should parse cross edge style (fixUnsupportedEdgeStyles)', () => {
+    const result = parseMermaid('flowchart TD\n  A ---x B');
+    expect(result.success).toBe(true);
+    expect(result.canvas.edges[0].data.edgeStyle).toBe('cross');
+    expect(result.canvas.edges[0].source).toBe('A');
+    expect(result.canvas.edges[0].target).toBe('B');
+  });
+
+  it('should parse bidirectional edge style', () => {
+    const result = parseMermaid('flowchart TD\n  A <---> B');
+    expect(result.canvas.edges[0].data.edgeStyle).toBe('bidirectional');
+  });
+});
+
+describe('parser — 错误场景', () => {
+  it('should return failure for empty input', () => {
+    const result = parseMermaid('');
+    expect(result.success).toBe(false);
+    expect(result.canvas.nodes).toHaveLength(0);
+  });
+
+  it('should return failure for invalid syntax', () => {
+    const result = parseMermaid('this is not mermaid code at all');
+    expect(result.success).toBe(false);
+  });
+
+  it('should return empty canvas for non-flowchart type', () => {
+    const result = parseMermaid('sequenceDiagram\n  A->>B: message');
+    // 非 flowchart 类型解析后画布为空（无节点和边）
+    expect(result.canvas.nodes).toHaveLength(0);
+    expect(result.canvas.edges).toHaveLength(0);
+  });
+
+  it('should parse edges with labels', () => {
+    const result = parseMermaid('flowchart TD\n  A -->|是| B');
+    expect(result.success).toBe(true);
+    expect(result.canvas.edges[0].data.label).toBe('是');
+  });
+});
+
+describe('parser — ErrorCollector 集成', () => {
+  it('should use default ErrorCollector when none provided', () => {
+    const result = parseMermaid('flowchart TD\n  A --> B');
+    expect(result.success).toBe(true);
+    expect(result.errors).toBeDefined();
+  });
+
+  it('should accept custom ErrorCollector', () => {
+    const collector = new ErrorCollectorImpl();
+    const result = parseMermaid('flowchart TD\n  A --> B', collector);
+    expect(result.success).toBe(true);
+    // 验证使用了传入的 collector（errors 内容一致）
+    expect(result.errors).toEqual(collector.getErrors());
+  });
+
+  it('should collect errors from invalid syntax', () => {
+    const collector = new ErrorCollectorImpl();
+    parseMermaid('invalid syntax here', collector);
+    expect(collector.hasErrors()).toBe(true);
+  });
+
+  it('should not affect success when only warnings', () => {
+    const collector = new ErrorCollectorImpl();
+    const result = parseMermaid('flowchart TD\n  A --> B', collector);
+    expect(result.success).toBe(true);
+    expect(collector.hasErrors()).toBe(false);
   });
 });

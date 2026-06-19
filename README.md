@@ -1,6 +1,6 @@
-# Mermaid 反向编辑器
+# Mermaid2AI-Chat
 
-通过 MCP 协议将可视化流程图编辑器与 AI 对话无缝集成，消除"编辑器↔AI对话"的复制粘贴割裂感。
+通过 MCP 协议将可视化流程图编辑器与 AI 对话无缝集成，消除"编辑器↔AI对话"的复制粘贴割裂感。让 TRAE 直接读取你在画布上画的流程图。
 
 ## 核心价值
 
@@ -24,49 +24,58 @@
 ## 项目结构
 
 ```
-mermaid反向编辑器/
-├── skills/                        # SKILL 文件
+mermaid2ai-chat/
+├── packages/                          # 源代码（monorepo）
+│   ├── editor/                        # 可视化编辑器（React Flow 画布组件库，可复用）
+│   ├── serializer/                    # Mermaid 序列化器（画布状态↔mermaid 双向转换）
+│   ├── server/                        # MCP 服务端 + WebSocket + Store
+│   ├── vscode-extension/              # VSCode 插件（自动启动 server）
+│   └── web-editor/                    # Web 编辑器
+├── skills/                            # SKILL 文件
 │   └── mermaid-flow-editor/
-│       ├── SKILL.md               # SKILL 主文件
-│       ├── examples.md            # 示例库
-│       └── README.md              # 安装指南
-└── src/                           # 源代码（待实现）
-    ├── editor/                    # 模块1：可视化编辑器
-    ├── serializer/                # 模块2：Mermaid序列化器
-    ├── mcp-server/                # 模块3：MCP服务端
-    └── vscode-plugin/             # VScode插件
+│       ├── SKILL.md                   # SKILL 主文件
+│       ├── references/                # 语法参考与示例
+│       └── examples.md                # 示例库
 ```
 
 ## 模块划分
 
 | 模块 | 名称 | 核心职责 | 状态 |
 |------|------|----------|------|
-| 模块1 | 可视化编辑器 | 画布UI、节点/边交互、状态管理 | 学习同行代码 |
-| 模块2 | Mermaid序列化器 | 画布状态↔mermaid代码双向转换 | 学习同行代码 |
-| 模块3 | MCP服务端 | 工具协议、HTTP接口、与编辑器状态同步 | 核心创新 |
-| 模块4 | SKILL规范 | AI交互规范文档、场景定义、工具使用说明 | 核心创新 |
+| 模块1 | 可视化编辑器 | 画布UI、14种节点形状、8种边样式、状态管理 | 已实现 |
+| 模块2 | Mermaid序列化器 | 画布状态↔mermaid代码双向转换、错误收集 | 已实现 |
+| 模块3 | MCP服务端 | get_input/create_view 工具、Streamable HTTP、消费状态机 | 已实现 |
+| 模块4 | SKILL规范 | AI交互规范、触发策略、工具使用决策树 | 已实现 |
+| 模块5 | VSCode插件 | IDE内集成编辑器、自动启动server、WebSocket同步 | 已实现 |
+| 模块6 | Web编辑器 | 浏览器版备选方案 | 已实现 |
 
 ## 技术栈
 
-- **前端**：React 18 + React Flow v12 + Zustand
-- **后端**：Node.js + Express + WebSocket
-- **MCP**：@modelcontextprotocol/server（Streamable HTTP）
-- **解析**：@crafter/mermaid-parser
-- **IDE集成**：VScode Extension API
+- **前端**：React 18 + @xyflow/react (React Flow v12) + Zustand
+- **后端**：Node.js + Express + WebSocket (ws)
+- **MCP**：@modelcontextprotocol/sdk（Streamable HTTP）
+- **解析**：@crafter/mermaid-parser + 自研序列化器
+- **IDE集成**：VSCode Extension API
+- **构建**：tsup（serializer/server）+ Vite（editor/web-editor）+ esbuild（vscode-extension）
+- **测试**：vitest
 
 ## 快速开始
 
-### 1. 安装并启动 MCP 服务
+### 1. 安装依赖
 
 ```bash
-npm install
-npm run build
-npm run start
+pnpm install
 ```
 
-### 2. 配置 AI IDE
+### 2. 构建
 
-编辑 `~/.claude/claude_desktop_config.json`：
+```bash
+pnpm build
+```
+
+### 3. 配置 TRAE 的 MCP 服务器
+
+在 TRAE 的 MCP 服务器配置中添加：
 
 ```json
 {
@@ -79,21 +88,26 @@ npm run start
 }
 ```
 
-### 3. 安装 SKILL
+### 4. 安装 SKILL
+
+将 `skills/mermaid-flow-editor` 复制到 TRAE 的 skills 目录。
+
+### 5. 使用
+
+**方式一：Web 编辑器**
 
 ```bash
-cp -r skills/mermaid-flow-editor ~/.claude/skills/
+# 启动 MCP 服务端（端口 14514）
+pnpm --filter @mermaid-editor/server start
+
+# 启动 Web 编辑器开发服务器
+pnpm --filter @mermaid-editor/web-editor dev
 ```
+访问 http://localhost:5173 ，在画布上绘制流程图，然后在 TRAE 对话中输入"看看我画的流程图"，AI 自动读取画布并分析。
 
-### 4. 使用
+**方式二：VSCode 插件**
 
-1. 启动 MCP 服务端（端口 14514）：`pnpm --filter @mermaid-editor/server start`
-2. 启动 Web 编辑器开发服务器：`pnpm --filter @mermaid-editor/web-editor dev`，访问 http://localhost:5173
-3. 在画布上绘制流程图
-4. 在 AI 对话中输入"看看我画的流程图"
-5. AI 自动读取画布并分析
-
-详细部署指南：[docs/deployment/部署指南.md](docs/deployment/部署指南.md)
+在 `packages/vscode-extension` 下按 F5 启动调试，插件会自动启动 MCP 服务端并打开编辑器面板，无需手动启动 server。
 
 ## 调研结论
 
@@ -101,29 +115,10 @@ cp -r skills/mermaid-flow-editor ~/.claude/skills/
 - 但都是独立应用，与 AI 对话割裂，需要手动复制粘贴
 - **没有"编辑器→AI对话"的直接 MCP 集成方案**，这是本项目要填补的空白
 
-详细调研报告：[docs/design/调研报告-避免重复造轮子分析-20260619.md](docs/design/调研报告-避免重复造轮子分析-20260619.md)
+## 学术支撑
 
-## 文档索引
-
-### 需求文档
-- [需求规格说明书](docs/requirements/需求规格说明书.md)
-
-### 设计文档
-- [总规划](docs/design/fractal-design-20260619-mermaid反向编辑器-总规划.md)
-- [架构设计文档](docs/architecture/架构设计文档.md)
-- [模块1：可视化编辑器](docs/design/fractal-design-20260619-mermaid反向编辑器-模块1-可视化编辑器.md)
-- [模块2：Mermaid序列化器](docs/design/fractal-design-20260619-mermaid反向编辑器-模块2-Mermaid序列化器.md)
-- [模块3：MCP服务端](docs/design/fractal-design-20260619-mermaid反向编辑器-模块3-MCP服务端.md)
-- [模块4：SKILL规范](docs/design/fractal-design-20260619-mermaid反向编辑器-模块4-SKILL规范.md)
-
-### 测试文档
-- [测试计划](docs/testing/测试计划.md)
-
-### 部署运维文档
-- [部署指南](docs/deployment/部署指南.md)
-
-### 调研文档
-- [调研报告-避免重复造轮子分析](docs/design/调研报告-避免重复造轮子分析-20260619.md)
+- **TextFlow**（NAACL 2025）：证明把流程图转成中间文本表示让 LLM 推理，优于端到端 VLM 直接看图。与本项目"画布状态→Mermaid文本→AI读取"方向一致。
+- **FlowPathAgent**（EMNLP 2025）：证明结构化流程图数据辅助 LLM 推理能提升可验证性。与本项目"通过 MCP 提供结构化画布状态"一致。
 
 ## License
 

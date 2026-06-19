@@ -246,7 +246,7 @@ function CanvasInner(props: CanvasProps) {
   }, []);
 
   // 双击画布空白处 → 创建矩形节点
-  // React Flow 无 onPaneDoubleClick，用外层 div 的 onDoubleClick + 判断 target 实现
+  // @xyflow/react v12 无 onPaneDoubleClick，通过 ReactFlow 的原生 onDoubleClick + 判断 target 实现
   const onCanvasDoubleClick = useCallback(
     (event: React.MouseEvent) => {
       // 只在点击画布背景（.react-flow__pane）时触发，避免双击节点/边时误触
@@ -443,7 +443,7 @@ function CanvasInner(props: CanvasProps) {
         </div>
 
         {/* 画布 */}
-        <div className="canvas-container" onDoubleClick={onCanvasDoubleClick}>
+        <div className="canvas-container">
           {/* 自定义 SVG marker 定义 — 边样式端点形状 */}
           <svg width="0" height="0" style={{ position: 'absolute' }}>
             <defs>
@@ -493,6 +493,8 @@ function CanvasInner(props: CanvasProps) {
             onConnect={onConnect}
             onNodeDoubleClick={onNodeDoubleClick}
             onEdgeDoubleClick={onEdgeDoubleClick}
+            onDoubleClick={onCanvasDoubleClick}
+            zoomOnDoubleClick={false}
             onSelectionChange={onSelectionChange}
             onMove={onMove}
             onDrop={onDrop}

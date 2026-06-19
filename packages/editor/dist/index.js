@@ -1,19 +1,19 @@
-import { jsxs as r, jsx as e, Fragment as $e } from "react/jsx-runtime";
-import { memo as oe, useState as L, useRef as _, useEffect as A, useCallback as $, useMemo as Ce } from "react";
-import { Handle as O, Position as H, getSmoothStepPath as Te, BaseEdge as Se, EdgeLabelRenderer as De, ReactFlowProvider as Re, useReactFlow as Me, useNodesState as Le, useEdgesState as Ie, addEdge as ze, ReactFlow as We, Background as Be, Controls as _e, MiniMap as Ae } from "@xyflow/react";
-import { parseMermaid as Pe, serializeMermaid as Fe } from "@mermaid-editor/serializer";
-const U = { width: 8, height: 8 }, T = oe(({ data: n, selected: i }) => {
+import { jsxs as r, jsx as e, Fragment as Ce } from "react/jsx-runtime";
+import { memo as oe, useState as I, useRef as A, useEffect as P, useCallback as E, useMemo as $e } from "react";
+import { Handle as H, Position as U, getSmoothStepPath as Te, BaseEdge as Se, EdgeLabelRenderer as De, ReactFlowProvider as Re, useReactFlow as Me, useNodesState as Le, useEdgesState as Ie, addEdge as ze, ReactFlow as We, Background as Be, Controls as _e, MiniMap as Ae } from "@xyflow/react";
+import { parseMermaid as Pe, serializeMermaid as Fe, layoutCanvas as Xe } from "@mermaid-editor/serializer";
+const Y = { width: 8, height: 8 }, T = oe(({ data: n, selected: i }) => {
   const p = n.shape, o = n.style, y = (o == null ? void 0 : o.stroke) ?? "#333", h = (o == null ? void 0 : o.fill) ?? "#fff", x = (o == null ? void 0 : o.color) ?? "#333";
   return /* @__PURE__ */ r("div", { className: "mermaid-node", style: { position: "relative", display: "inline-block" }, children: [
-    /* @__PURE__ */ e(O, { type: "target", position: H.Top, style: U }),
-    /* @__PURE__ */ e(O, { type: "target", position: H.Left, style: U }),
-    /* @__PURE__ */ e(Xe, { shape: p, label: n.label, stroke: y, fill: h, color: x, selected: i }),
-    /* @__PURE__ */ e(O, { type: "source", position: H.Bottom, style: U }),
-    /* @__PURE__ */ e(O, { type: "source", position: H.Right, style: U })
+    /* @__PURE__ */ e(H, { type: "target", position: U.Top, style: Y }),
+    /* @__PURE__ */ e(H, { type: "target", position: U.Left, style: Y }),
+    /* @__PURE__ */ e(Ke, { shape: p, label: n.label, stroke: y, fill: h, color: x, selected: i }),
+    /* @__PURE__ */ e(H, { type: "source", position: U.Bottom, style: Y }),
+    /* @__PURE__ */ e(H, { type: "source", position: U.Right, style: Y })
   ] });
 });
 T.displayName = "MermaidNode";
-function Xe({
+function Ke({
   shape: n,
   label: i,
   stroke: p,
@@ -21,21 +21,21 @@ function Xe({
   color: y,
   selected: h
 }) {
-  const x = i.split(/<br\s*\/?>|\n/i), c = x.length, k = 18, d = 48, I = 8, z = 24, R = Math.max(...x.map((u) => u.length)), t = Math.max(R * I, 60) + z * 2, a = d + (c - 1) * k, v = h ? 3 : 2, f = h ? "#1890ff" : p, S = {
+  const x = i.split(/<br\s*\/?>|\n/i), c = x.length, k = 18, d = 48, z = 8, W = 24, R = Math.max(...x.map((u) => u.length)), t = Math.max(R * z, 60) + W * 2, a = d + (c - 1) * k, v = h ? 3 : 2, f = h ? "#1890ff" : p, S = {
     fill: y,
     fontSize: "14px",
     textAnchor: "middle",
     dominantBaseline: "central",
     userSelect: "none",
     pointerEvents: "none"
-  }, w = (u, g = a / 2) => /* @__PURE__ */ e("text", { x: u, y: g, style: S, children: x.map((D, W) => /* @__PURE__ */ e(
+  }, w = (u, b = a / 2) => /* @__PURE__ */ e("text", { x: u, y: b, style: S, children: x.map((D, B) => /* @__PURE__ */ e(
     "tspan",
     {
       x: u,
-      dy: W === 0 ? -(c - 1) * k / 2 : k,
+      dy: B === 0 ? -(c - 1) * k / 2 : k,
       children: D
     },
-    W
+    B
   )) });
   switch (n) {
     case "rect":
@@ -54,16 +54,16 @@ function Xe({
         w(t / 2)
       ] });
     case "diamond": {
-      const u = t / 2, g = a / 2, D = t / 2, W = a / 2, F = `${u},${g - W} ${u + D},${g} ${u},${g + W} ${u - D},${g}`;
+      const u = t / 2, b = a / 2, D = t / 2, B = a / 2, F = `${u},${b - B} ${u + D},${b} ${u},${b + B} ${u - D},${b}`;
       return /* @__PURE__ */ r("svg", { width: t, height: a, style: { display: "block" }, children: [
         /* @__PURE__ */ e("polygon", { points: F, fill: o, stroke: f, strokeWidth: v }),
         w(u)
       ] });
     }
     case "circle": {
-      const u = Math.max(t, a), g = u / 2 - 2;
+      const u = Math.max(t, a), b = u / 2 - 2;
       return /* @__PURE__ */ r("svg", { width: u, height: u, style: { display: "block" }, children: [
-        /* @__PURE__ */ e("circle", { cx: u / 2, cy: u / 2, r: g, fill: o, stroke: f, strokeWidth: v }),
+        /* @__PURE__ */ e("circle", { cx: u / 2, cy: u / 2, r: b, fill: o, stroke: f, strokeWidth: v }),
         w(u / 2, u / 2)
       ] });
     }
@@ -82,16 +82,16 @@ function Xe({
         w(t / 2)
       ] });
     case "hexagon": {
-      const g = `20,1 ${t - 20},1 ${t - 1},${a / 2} ${t - 20},${a - 1} 20,${a - 1} 1,${a / 2}`;
+      const b = `20,1 ${t - 20},1 ${t - 1},${a / 2} ${t - 20},${a - 1} 20,${a - 1} 1,${a / 2}`;
       return /* @__PURE__ */ r("svg", { width: t, height: a, style: { display: "block" }, children: [
-        /* @__PURE__ */ e("polygon", { points: g, fill: o, stroke: f, strokeWidth: v }),
+        /* @__PURE__ */ e("polygon", { points: b, fill: o, stroke: f, strokeWidth: v }),
         w(t / 2)
       ] });
     }
     case "parallelogram": {
-      const g = `16,1 ${t - 1},1 ${t - 16},${a - 1} 1,${a - 1}`;
+      const b = `16,1 ${t - 1},1 ${t - 16},${a - 1} 1,${a - 1}`;
       return /* @__PURE__ */ r("svg", { width: t, height: a, style: { display: "block" }, children: [
-        /* @__PURE__ */ e("polygon", { points: g, fill: o, stroke: f, strokeWidth: v }),
+        /* @__PURE__ */ e("polygon", { points: b, fill: o, stroke: f, strokeWidth: v }),
         w(t / 2)
       ] });
     }
@@ -103,38 +103,38 @@ function Xe({
         w(t / 2)
       ] });
     case "doublecircle": {
-      const u = Math.max(t, a), g = u / 2 - 2, D = g - 6;
+      const u = Math.max(t, a), b = u / 2 - 2, D = b - 6;
       return /* @__PURE__ */ r("svg", { width: u, height: u, style: { display: "block" }, children: [
-        /* @__PURE__ */ e("circle", { cx: u / 2, cy: u / 2, r: g, fill: o, stroke: f, strokeWidth: v }),
+        /* @__PURE__ */ e("circle", { cx: u / 2, cy: u / 2, r: b, fill: o, stroke: f, strokeWidth: v }),
         /* @__PURE__ */ e("circle", { cx: u / 2, cy: u / 2, r: D, fill: "none", stroke: f, strokeWidth: v }),
         w(u / 2, u / 2)
       ] });
     }
     case "asymmetric": {
-      const g = `1,1 ${t - 20},1 ${t - 1},${a / 2} ${t - 20},${a - 1} 1,${a - 1}`;
+      const b = `1,1 ${t - 20},1 ${t - 1},${a / 2} ${t - 20},${a - 1} 1,${a - 1}`;
       return /* @__PURE__ */ r("svg", { width: t, height: a, style: { display: "block" }, children: [
-        /* @__PURE__ */ e("polygon", { points: g, fill: o, stroke: f, strokeWidth: v }),
+        /* @__PURE__ */ e("polygon", { points: b, fill: o, stroke: f, strokeWidth: v }),
         w(t / 2 - 20 / 2)
       ] });
     }
     case "parallelogram-reverse": {
-      const g = `1,1 ${t - 16},1 ${t - 1},${a - 1} 16,${a - 1}`;
+      const b = `1,1 ${t - 16},1 ${t - 1},${a - 1} 16,${a - 1}`;
       return /* @__PURE__ */ r("svg", { width: t, height: a, style: { display: "block" }, children: [
-        /* @__PURE__ */ e("polygon", { points: g, fill: o, stroke: f, strokeWidth: v }),
+        /* @__PURE__ */ e("polygon", { points: b, fill: o, stroke: f, strokeWidth: v }),
         w(t / 2)
       ] });
     }
     case "trapezoid": {
-      const g = `20,1 ${t - 20},1 ${t - 1},${a - 1} 1,${a - 1}`;
+      const b = `20,1 ${t - 20},1 ${t - 1},${a - 1} 1,${a - 1}`;
       return /* @__PURE__ */ r("svg", { width: t, height: a, style: { display: "block" }, children: [
-        /* @__PURE__ */ e("polygon", { points: g, fill: o, stroke: f, strokeWidth: v }),
+        /* @__PURE__ */ e("polygon", { points: b, fill: o, stroke: f, strokeWidth: v }),
         w(t / 2)
       ] });
     }
     case "trapezoid-reverse": {
-      const g = `1,1 ${t - 1},1 ${t - 20},${a - 1} 20,${a - 1}`;
+      const b = `1,1 ${t - 1},1 ${t - 20},${a - 1} 20,${a - 1}`;
       return /* @__PURE__ */ r("svg", { width: t, height: a, style: { display: "block" }, children: [
-        /* @__PURE__ */ e("polygon", { points: g, fill: o, stroke: f, strokeWidth: v }),
+        /* @__PURE__ */ e("polygon", { points: b, fill: o, stroke: f, strokeWidth: v }),
         w(t / 2)
       ] });
     }
@@ -145,7 +145,7 @@ function Xe({
       ] });
   }
 }
-const Ke = {
+const Oe = {
   rect: T,
   rounded: T,
   stadium: T,
@@ -171,20 +171,20 @@ const Ke = {
   cross: { markerEndType: "custom:cross" },
   bidirectional: { markerStartType: "custom:arrow", markerEndType: "custom:arrow" }
 };
-function Oe(n) {
+function He(n) {
   return te[n] ?? te.arrow;
 }
-function He(n) {
+function Ue(n) {
   return (n == null ? void 0 : n.startsWith("custom:")) ?? !1;
 }
-function Ue(n) {
+function Ye(n) {
   return `mermaid-${n.replace("custom:", "")}-marker`;
 }
 function ne(n) {
-  if (!(!n || !He(n)))
-    return `url(#${Ue(n)})`;
+  if (!(!n || !Ue(n)))
+    return `url(#${Ye(n)})`;
 }
-const Ye = {
+const Ve = {
   arrow: { stroke: "#333", strokeWidth: 2 },
   line: { stroke: "#333", strokeWidth: 2 },
   dotted: { stroke: "#333", strokeWidth: 2, strokeDasharray: "5,5" },
@@ -204,7 +204,7 @@ const Ye = {
   data: c,
   selected: k
 }) => {
-  const d = c, I = (d == null ? void 0 : d.edgeStyle) ?? "arrow", z = Ye[I], R = Oe(I), N = ne(R.markerEndType), t = ne(R.markerStartType), [a, v, f] = Te({
+  const d = c, z = (d == null ? void 0 : d.edgeStyle) ?? "arrow", W = Ve[z], R = He(z), N = ne(R.markerEndType), t = ne(R.markerStartType), [a, v, f] = Te({
     sourceX: i,
     sourceY: p,
     sourcePosition: h,
@@ -212,15 +212,15 @@ const Ye = {
     targetY: y,
     targetPosition: x
   });
-  return /* @__PURE__ */ r($e, { children: [
+  return /* @__PURE__ */ r(Ce, { children: [
     /* @__PURE__ */ e(
       Se,
       {
         id: n,
         path: a,
         style: {
-          ...z,
-          ...k ? { stroke: "#1890ff", strokeWidth: (z.strokeWidth ?? 2) + 1 } : {}
+          ...W,
+          ...k ? { stroke: "#1890ff", strokeWidth: (W.strokeWidth ?? 2) + 1 } : {}
         },
         markerEnd: N,
         markerStart: t
@@ -246,11 +246,11 @@ const Ye = {
   ] });
 });
 Q.displayName = "MermaidEdge";
-const Ve = {
+const je = {
   default: Q,
   smoothstep: Q
-}, je = ["TB", "TD", "BT", "RL", "LR"];
-function Ge({ direction: n, onDirectionChange: i, mermaidCode: p }) {
+}, Ge = ["TB", "TD", "BT", "RL", "LR"];
+function qe({ direction: n, onDirectionChange: i, mermaidCode: p }) {
   const o = () => {
     const h = new Blob([p], { type: "text/plain;charset=utf-8" }), x = URL.createObjectURL(h), c = document.createElement("a");
     c.href = x, c.download = `flowchart-${Date.now()}.mmd`, document.body.appendChild(c), c.click(), document.body.removeChild(c), URL.revokeObjectURL(x);
@@ -270,7 +270,7 @@ function Ge({ direction: n, onDirectionChange: i, mermaidCode: p }) {
           onChange: (h) => i(h.target.value),
           className: "toolbar-select",
           title: "切换流程图方向并重新布局",
-          children: je.map((h) => /* @__PURE__ */ e("option", { value: h, children: h }, h))
+          children: Ge.map((h) => /* @__PURE__ */ e("option", { value: h, children: h }, h))
         }
       )
     ] }),
@@ -281,7 +281,7 @@ function Ge({ direction: n, onDirectionChange: i, mermaidCode: p }) {
     ] })
   ] });
 }
-const qe = [
+const Qe = [
   // 基础10种
   { type: "rect", label: "矩形", icon: "▭" },
   { type: "rounded", label: "圆角", icon: "▢" },
@@ -299,13 +299,13 @@ const qe = [
   { type: "trapezoid", label: "梯形", icon: "⏢" },
   { type: "trapezoid-reverse", label: "反向梯形", icon: "⏃" }
 ];
-function Qe({ onAddNode: n }) {
+function Je({ onAddNode: n }) {
   const i = (p, o) => {
     p.dataTransfer.setData("application/mermaid-shape", o), p.dataTransfer.effectAllowed = "move";
   };
   return /* @__PURE__ */ r("div", { className: "node-library", children: [
     /* @__PURE__ */ e("h3", { className: "library-title", children: "节点库" }),
-    /* @__PURE__ */ e("div", { className: "node-list", children: qe.map((p) => /* @__PURE__ */ r(
+    /* @__PURE__ */ e("div", { className: "node-list", children: Qe.map((p) => /* @__PURE__ */ r(
       "button",
       {
         className: "node-item",
@@ -322,7 +322,7 @@ function Qe({ onAddNode: n }) {
     )) })
   ] });
 }
-function Je({ consumed: n, canvasSource: i, lastConsumedAt: p, onReset: o }) {
+function Ze({ consumed: n, canvasSource: i, lastConsumedAt: p, onReset: o }) {
   let y = "", h = "";
   i === null ? (y = "空画布", h = "status-empty") : !n && i === "user" ? (y = "待消费（用户绘制）", h = "status-pending") : n && i === "user" ? (y = "已消费", h = "status-consumed") : n && i === "ai" && (y = "AI生成内容（已消费）", h = "status-ai");
   const x = p ? new Date(p).toLocaleTimeString("zh-CN") : "";
@@ -332,19 +332,19 @@ function Je({ consumed: n, canvasSource: i, lastConsumedAt: p, onReset: o }) {
     n && /* @__PURE__ */ e("button", { className: "reset-button", onClick: o, children: "重新启用" })
   ] });
 }
-const Ze = {
+const et = {
   connected: { color: "#52c41a", text: "已连接" },
   reconnecting: { color: "#faad14", text: "重连中..." },
   disconnected: { color: "#ff4d4f", text: "已断开" }
 };
-function et({ status: n }) {
-  const i = Ze[n];
+function tt({ status: n }) {
+  const i = et[n];
   return /* @__PURE__ */ r("div", { className: "connection-status", children: [
     /* @__PURE__ */ e("span", { className: "status-dot", style: { backgroundColor: i.color } }),
     /* @__PURE__ */ e("span", { className: "status-label", children: i.text })
   ] });
 }
-const tt = [
+const nt = [
   { value: "rect", label: "矩形" },
   { value: "rounded", label: "圆角" },
   { value: "stadium", label: "体育场" },
@@ -359,7 +359,7 @@ const tt = [
   { value: "parallelogram-reverse", label: "反向平行四边形" },
   { value: "trapezoid", label: "梯形" },
   { value: "trapezoid-reverse", label: "反向梯形" }
-], nt = [
+], at = [
   { value: "arrow", label: "实线箭头 (-->)" },
   { value: "line", label: "实线 (---)" },
   { value: "dotted", label: "虚线 (-.-)" },
@@ -369,7 +369,7 @@ const tt = [
   { value: "cross", label: "交叉端点 (---x)" },
   { value: "bidirectional", label: "双向箭头 (<--->)" }
 ];
-function at({ selectedNode: n, selectedEdge: i, onUpdateNode: p, onUpdateEdge: o }) {
+function lt({ selectedNode: n, selectedEdge: i, onUpdateNode: p, onUpdateEdge: o }) {
   var y, h, x;
   return !n && !i ? /* @__PURE__ */ r("div", { className: "property-panel", children: [
     /* @__PURE__ */ e("h3", { className: "panel-title", children: "属性面板" }),
@@ -400,7 +400,7 @@ function at({ selectedNode: n, selectedEdge: i, onUpdateNode: p, onUpdateEdge: o
               const k = c.target.value;
               p(n.id, { shape: k });
             },
-            children: tt.map((c) => /* @__PURE__ */ e("option", { value: c.value, children: c.label }, c.value))
+            children: nt.map((c) => /* @__PURE__ */ e("option", { value: c.value, children: c.label }, c.value))
           }
         )
       ] }),
@@ -498,7 +498,7 @@ function at({ selectedNode: n, selectedEdge: i, onUpdateNode: p, onUpdateEdge: o
               const k = c.target.value;
               o(i.id, { edgeStyle: k });
             },
-            children: nt.map((c) => /* @__PURE__ */ e("option", { value: c.value, children: c.label }, c.value))
+            children: at.map((c) => /* @__PURE__ */ e("option", { value: c.value, children: c.label }, c.value))
           }
         )
       ] }),
@@ -518,8 +518,8 @@ function at({ selectedNode: n, selectedEdge: i, onUpdateNode: p, onUpdateEdge: o
   ] }) : null;
 }
 function ae({ value: n, onConfirm: i, onCancel: p }) {
-  const [o, y] = L(n), h = _(null);
-  return A(() => {
+  const [o, y] = I(n), h = A(null);
+  return P(() => {
     var k, d;
     (k = h.current) == null || k.focus(), (d = h.current) == null || d.select();
   }, []), /* @__PURE__ */ e(
@@ -547,11 +547,11 @@ function ae({ value: n, onConfirm: i, onCancel: p }) {
     }
   );
 }
-function lt({ code: n, onCodeChange: i, error: p }) {
-  const [o, y] = L(n || "flowchart TD"), [h, x] = L(!1), c = _(!1), k = _(null);
-  return A(() => {
+function ot({ code: n, onCodeChange: i, error: p }) {
+  const [o, y] = I(n || "flowchart TD"), [h, x] = I(!1), c = A(!1), k = A(null);
+  return P(() => {
     !h && !c.current && y(n || "flowchart TD");
-  }, [n, h]), A(() => {
+  }, [n, h]), P(() => {
     n === o && c.current && (c.current = !1);
   }, [n, o]), /* @__PURE__ */ r("div", { className: "code-editor", children: [
     /* @__PURE__ */ e("div", { className: "code-editor-title", children: "Mermaid 代码" }),
@@ -578,12 +578,12 @@ function lt({ code: n, onCodeChange: i, error: p }) {
     p && /* @__PURE__ */ e("div", { className: "code-editor-error", children: p })
   ] });
 }
-let ot = 0;
+let rt = 0;
 function q() {
-  return `node_${Date.now()}_${ot++}`;
+  return `node_${Date.now()}_${rt++}`;
 }
 const le = /* @__PURE__ */ new Set(["measured", "dimensions"]);
-function rt(n) {
+function st(n) {
   const {
     syncNodes: i,
     syncEdges: p,
@@ -594,40 +594,40 @@ function rt(n) {
     lastConsumedAt: c,
     connectionStatus: k,
     onCanvasEdit: d,
-    onDirectionChange: I,
-    onResetConsumed: z,
+    onDirectionChange: z,
+    onResetConsumed: W,
     onViewportChange: R
-  } = n, N = Me(), [t, a, v] = Le(i), [f, S, w] = Ie(p), [u, g] = L(null), [D, W] = L(null), [F, X] = L(null), [J, K] = L(null), [re, Z] = L(null), Y = _(t), P = _(f), B = _(o);
-  Y.current = t, P.current = f, B.current = o;
-  const V = _(!1);
-  A(() => {
+  } = n, N = Me(), [t, a, v] = Le(i), [f, S, w] = Ie(p), [u, b] = I(null), [D, B] = I(null), [F, X] = I(null), [J, K] = I(null), [re, Z] = I(null), O = A(t), M = A(f), _ = A(o);
+  O.current = t, M.current = f, _.current = o;
+  const V = A(!1);
+  P(() => {
     a(i);
-  }, [i, a]), A(() => {
+  }, [i, a]), P(() => {
     S(p);
-  }, [p, S]), A(() => {
+  }, [p, S]), P(() => {
     y !== null && (V.current = !0, N.setViewport({ x: y.x, y: y.y, zoom: y.zoom }), requestAnimationFrame(() => {
       V.current = !1;
     }));
   }, [y, N]);
-  const E = $(() => ({
-    nodes: Y.current,
-    edges: P.current,
-    direction: B.current
-  }), []), se = $(
+  const C = E(() => ({
+    nodes: O.current,
+    edges: M.current,
+    direction: _.current
+  }), []), se = E(
     (l) => {
-      v(l), l.some((b) => !le.has(b.type)) && setTimeout(() => {
-        d(E());
+      v(l), l.some((g) => !le.has(g.type)) && setTimeout(() => {
+        d(C());
       }, 0);
     },
-    [v, d, E]
-  ), ie = $(
+    [v, d, C]
+  ), ie = E(
     (l) => {
-      w(l), l.some((b) => !le.has(b.type)) && setTimeout(() => {
-        d(E());
+      w(l), l.some((g) => !le.has(g.type)) && setTimeout(() => {
+        d(C());
       }, 0);
     },
-    [w, d, E]
-  ), ce = $(
+    [w, d, C]
+  ), ce = E(
     (l) => {
       const s = {
         ...l,
@@ -635,12 +635,12 @@ function rt(n) {
         type: "smoothstep",
         data: { edgeStyle: "arrow" }
       };
-      S((b) => ze(s, b)), setTimeout(() => {
-        d(E());
+      S((g) => ze(s, g)), setTimeout(() => {
+        d(C());
       }, 0);
     },
-    [S, d, E]
-  ), de = $(
+    [S, d, C]
+  ), de = E(
     (l) => {
       const s = {
         id: q(),
@@ -651,150 +651,158 @@ function rt(n) {
           shape: l
         }
       };
-      a((b) => {
-        const m = [...b, s];
+      a((g) => {
+        const m = [...g, s];
         return setTimeout(() => {
           d({
             nodes: m,
-            edges: P.current,
-            direction: B.current
+            edges: M.current,
+            direction: _.current
           });
         }, 0), m;
       });
     },
     [a, d]
-  ), ue = $(
+  ), ue = E(
     (l) => {
       l.preventDefault();
       const s = l.dataTransfer.getData("application/mermaid-shape");
       if (!s) return;
-      const b = N.screenToFlowPosition({
+      const g = N.screenToFlowPosition({
         x: l.clientX,
         y: l.clientY
       });
-      b.x -= 70, b.y -= 25;
+      g.x -= 70, g.y -= 25;
       const m = {
         id: q(),
         type: s,
-        position: b,
+        position: g,
         data: { label: "新节点", shape: s }
       };
-      a((M) => {
-        const C = [...M, m];
+      a((L) => {
+        const $ = [...L, m];
         return setTimeout(() => {
           d({
-            nodes: C,
-            edges: P.current,
-            direction: B.current
+            nodes: $,
+            edges: M.current,
+            direction: _.current
           });
-        }, 0), C;
+        }, 0), $;
       });
     },
     [N, a, d]
-  ), pe = $((l) => {
+  ), pe = E((l) => {
     l.preventDefault(), l.dataTransfer.dropEffect = "move";
-  }, []), he = $(
+  }, []), he = E(
     (l) => {
       if (!l.target.classList.contains("react-flow__pane")) return;
-      const b = N.screenToFlowPosition({
+      const g = N.screenToFlowPosition({
         x: l.clientX,
         y: l.clientY
       }), m = {
         id: q(),
         type: "rect",
-        position: b,
+        position: g,
         data: { label: "新节点", shape: "rect" }
       };
-      a((M) => {
-        const C = [...M, m];
+      a((L) => {
+        const $ = [...L, m];
         return setTimeout(() => {
           d({
-            nodes: C,
-            edges: P.current,
-            direction: B.current
+            nodes: $,
+            edges: M.current,
+            direction: _.current
           });
-        }, 0), C;
+        }, 0), $;
       });
     },
     [N, a, d]
-  ), me = $((l, s) => {
+  ), me = E((l, s) => {
     X(s.id), K(null);
-  }, []), fe = $((l, s) => {
+  }, []), fe = E((l, s) => {
     K(s.id), X(null);
-  }, []), ye = $((l, s) => {
+  }, []), ye = E((l, s) => {
     a(
-      (b) => b.map((m) => m.id === l ? { ...m, data: { ...m.data, label: s } } : m)
+      (g) => g.map((m) => m.id === l ? { ...m, data: { ...m.data, label: s } } : m)
     ), X(null), setTimeout(() => {
-      d(E());
+      d(C());
     }, 0);
-  }, [a, d, E]), be = $((l, s) => {
+  }, [a, d, C]), ge = E((l, s) => {
     S(
-      (b) => b.map((m) => m.id === l ? { ...m, data: { ...m.data, label: s || void 0 } } : m)
+      (g) => g.map((m) => m.id === l ? { ...m, data: { ...m.data, label: s || void 0 } } : m)
     ), K(null), setTimeout(() => {
-      d(E());
+      d(C());
     }, 0);
-  }, [S, d, E]), ge = $((l) => {
+  }, [S, d, C]), be = E((l) => {
     const s = Pe(l);
-    s.success ? (a(s.canvas.nodes), S(s.canvas.edges), B.current = s.canvas.direction, Z(null), setTimeout(() => {
+    s.success ? (a(s.canvas.nodes), S(s.canvas.edges), _.current = s.canvas.direction, Z(null), setTimeout(() => {
       d({
         nodes: s.canvas.nodes,
         edges: s.canvas.edges,
         direction: s.canvas.direction
       });
-    }, 0)) : Z(s.errors.map((b) => b.message).join("; "));
-  }, [a, S, d]), ve = $(({ nodes: l, edges: s }) => {
-    g(l.length === 1 ? l[0].id : null), W(s.length === 1 ? s[0].id : null);
-  }, []), ke = $(
+    }, 0)) : Z(s.errors.map((g) => g.message).join("; "));
+  }, [a, S, d]), ve = E(({ nodes: l, edges: s }) => {
+    b(l.length === 1 ? l[0].id : null), B(s.length === 1 ? s[0].id : null);
+  }, []), ke = E(
     (l, s) => {
       V.current || R({ x: s.x, y: s.y, zoom: s.zoom });
     },
     [R]
-  ), xe = $((l, s) => {
-    a((b) => b.map((m) => {
+  ), xe = E((l, s) => {
+    a((g) => g.map((m) => {
       if (m.id !== l) return m;
-      const M = { ...m.data, ...s }, C = s.shape ?? m.type;
-      return { ...m, type: C, data: M };
+      const L = { ...m.data, ...s }, $ = s.shape ?? m.type;
+      return { ...m, type: $, data: L };
     })), setTimeout(() => {
-      d(E());
+      d(C());
     }, 0);
-  }, [a, d, E]), Ne = $((l, s) => {
-    S((b) => b.map((m) => m.id === l ? { ...m, data: { ...m.data, ...s } } : m)), setTimeout(() => {
-      d(E());
+  }, [a, d, C]), Ne = E((l, s) => {
+    S((g) => g.map((m) => m.id === l ? { ...m, data: { ...m.data, ...s } } : m)), setTimeout(() => {
+      d(C());
     }, 0);
-  }, [S, d, E]);
-  A(() => {
+  }, [S, d, C]);
+  P(() => {
     const l = (s) => {
       if (s.key === "Delete" || s.key === "Backspace") {
-        const b = s.target;
-        if (b.tagName === "INPUT" || b.tagName === "SELECT" || b.tagName === "TEXTAREA")
+        const g = s.target;
+        if (g.tagName === "INPUT" || g.tagName === "SELECT" || g.tagName === "TEXTAREA")
           return;
-        const m = Y.current.filter((C) => C.selected), M = P.current.filter((C) => C.selected);
-        (m.length > 0 || M.length > 0) && (s.preventDefault(), N.deleteElements({
-          nodes: m.map((C) => ({ id: C.id })),
-          edges: M.map((C) => ({ id: C.id }))
+        const m = O.current.filter(($) => $.selected), L = M.current.filter(($) => $.selected);
+        (m.length > 0 || L.length > 0) && (s.preventDefault(), N.deleteElements({
+          nodes: m.map(($) => ({ id: $.id })),
+          edges: L.map(($) => ({ id: $.id }))
         }), setTimeout(() => {
-          d(E());
+          d(C());
         }, 0));
       }
     };
     return window.addEventListener("keydown", l), () => window.removeEventListener("keydown", l);
-  }, [N, d, E]);
-  const j = F ? t.find((l) => l.id === F) : null, G = J ? f.find((l) => l.id === J) : null, we = u ? t.find((l) => l.id === u) ?? null : null, Ee = D ? f.find((l) => l.id === D) ?? null : null, ee = Ce(() => Fe({ nodes: t, edges: f, direction: o }).mermaid, [t, f, o]);
+  }, [N, d, C]);
+  const j = F ? t.find((l) => l.id === F) : null, G = J ? f.find((l) => l.id === J) : null, we = u ? t.find((l) => l.id === u) ?? null : null, Ee = D ? f.find((l) => l.id === D) ?? null : null, ee = $e(() => Fe({ nodes: t, edges: f, direction: o }).mermaid, [t, f, o]);
   return /* @__PURE__ */ r("div", { className: "app-container", children: [
     /* @__PURE__ */ e(
-      Ge,
+      qe,
       {
         direction: o,
         mermaidCode: ee,
         onDirectionChange: (l) => {
-          B.current = l, I(l), d({ ...E(), direction: l });
+          _.current = l;
+          const s = [...O.current];
+          Xe(s, M.current, l), a(s), z(l), setTimeout(() => {
+            d({
+              nodes: s,
+              edges: M.current,
+              direction: l
+            });
+          }, 0);
         }
       }
     ),
     /* @__PURE__ */ r("div", { className: "main-content", children: [
       /* @__PURE__ */ r("div", { className: "left-panel", children: [
-        /* @__PURE__ */ e(lt, { code: ee, onCodeChange: ge, error: re }),
-        /* @__PURE__ */ e(Qe, { onAddNode: de })
+        /* @__PURE__ */ e(ot, { code: ee, onCodeChange: be, error: re }),
+        /* @__PURE__ */ e(Je, { onAddNode: de })
       ] }),
       /* @__PURE__ */ r("div", { className: "canvas-container", onDoubleClick: he, children: [
         /* @__PURE__ */ e("svg", { width: "0", height: "0", style: { position: "absolute" }, children: /* @__PURE__ */ r("defs", { children: [
@@ -852,8 +860,8 @@ function rt(n) {
             onMove: ke,
             onDrop: ue,
             onDragOver: pe,
-            nodeTypes: Ke,
-            edgeTypes: Ve,
+            nodeTypes: Oe,
+            edgeTypes: je,
             deleteKeyCode: null,
             fitView: !0,
             defaultEdgeOptions: {
@@ -910,25 +918,25 @@ function rt(n) {
               ae,
               {
                 value: G.data.label ?? "",
-                onConfirm: (l) => be(G.id, l),
+                onConfirm: (l) => ge(G.id, l),
                 onCancel: () => K(null)
               }
             )
           }
         ),
         /* @__PURE__ */ e(
-          Je,
+          Ze,
           {
             consumed: h,
             canvasSource: x,
             lastConsumedAt: c,
-            onReset: z
+            onReset: W
           }
         ),
-        /* @__PURE__ */ e(et, { status: k })
+        /* @__PURE__ */ e(tt, { status: k })
       ] }),
       /* @__PURE__ */ e(
-        at,
+        lt,
         {
           selectedNode: we,
           selectedEdge: Ee,
@@ -939,20 +947,20 @@ function rt(n) {
     ] })
   ] });
 }
-function ut(n) {
-  return /* @__PURE__ */ e(Re, { children: /* @__PURE__ */ e(rt, { ...n }) });
+function pt(n) {
+  return /* @__PURE__ */ e(Re, { children: /* @__PURE__ */ e(st, { ...n }) });
 }
 export {
-  ut as Canvas,
-  lt as CodeEditor,
-  et as ConnectionStatus,
-  Je as ConsumedBadge,
+  pt as Canvas,
+  ot as CodeEditor,
+  tt as ConnectionStatus,
+  Ze as ConsumedBadge,
   ae as InlineEditor,
   Q as MermaidEdgeComponent,
   T as MermaidNodeComponent,
-  Qe as NodeLibrary,
-  at as PropertyPanel,
-  Ge as Toolbar,
-  Ve as edgeTypes,
-  Ke as nodeTypes
+  Je as NodeLibrary,
+  lt as PropertyPanel,
+  qe as Toolbar,
+  je as edgeTypes,
+  Oe as nodeTypes
 };

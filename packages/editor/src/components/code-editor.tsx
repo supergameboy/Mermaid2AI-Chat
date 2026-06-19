@@ -28,13 +28,6 @@ export function CodeEditor({ code, onCodeChange, error }: CodeEditorProps) {
     }
   }, [code, isFocused]);
 
-  // 解析成功后（code prop 变为用户输入的值），重置编辑标记
-  useEffect(() => {
-    if (code === localCode && userEditedRef.current) {
-      userEditedRef.current = false;
-    }
-  }, [code, localCode]);
-
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     userEditedRef.current = true;
     setLocalCode(e.target.value);
@@ -46,6 +39,7 @@ export function CodeEditor({ code, onCodeChange, error }: CodeEditorProps) {
     setIsFocused(false);
     if (userEditedRef.current && localCode !== code) {
       onCodeChange?.(localCode);
+      userEditedRef.current = false; // 提交后立即重置，允许后续画布变化同步
     }
   };
 
@@ -54,6 +48,7 @@ export function CodeEditor({ code, onCodeChange, error }: CodeEditorProps) {
       e.preventDefault();
       if (userEditedRef.current && localCode !== code) {
         onCodeChange?.(localCode);
+        userEditedRef.current = false; // 提交后立即重置，允许后续画布变化同步
       }
     }
   };

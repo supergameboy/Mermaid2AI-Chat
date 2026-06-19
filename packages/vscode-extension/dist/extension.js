@@ -3754,11 +3754,11 @@ var WsClient = class {
     try {
       const ws = new wrapper_default(this.url);
       this.ws = ws;
-      ws.onopen = () => {
+      ws.on("open", () => {
         this.reconnectAttempt = 0;
         this.setStatus("connected");
         console.log("[VSCode-WS] \u5DF2\u8FDE\u63A5\u5230 Mermaid \u670D\u52A1\u7AEF");
-      };
+      });
       ws.on("message", (data) => {
         let msg;
         try {
@@ -3770,16 +3770,16 @@ var WsClient = class {
           handler(msg);
         }
       });
-      ws.onclose = () => {
+      ws.on("close", () => {
         this.ws = null;
         this.setStatus("disconnected");
         if (this.shouldReconnect) {
           this.scheduleReconnect();
         }
-      };
-      ws.onerror = (err) => {
-        console.error("[VSCode-WS] \u9519\u8BEF:", err.message ?? err);
-      };
+      });
+      ws.on("error", (err) => {
+        console.error("[VSCode-WS] \u9519\u8BEF:", err.message);
+      });
     } catch (e) {
       console.error("[VSCode-WS] \u8FDE\u63A5\u5931\u8D25:", e);
       this.scheduleReconnect();
@@ -3834,8 +3834,14 @@ var WsClient = class {
 
 // src/panel-manager.ts
 var initialState = {
-  tabs: [],
-  activeTabId: null,
+  nodes: [],
+  edges: [],
+  direction: "TD",
+  viewport: null,
+  consumed: false,
+  lastConsumedAt: null,
+  canvasSource: null,
+  title: null,
   connectionStatus: "disconnected"
 };
 var PanelManager = class {
@@ -3861,58 +3867,46 @@ var PanelManager = class {
   }
   handleServerMessage(msg) {
     switch (msg.type) {
-      case "tab_create": {
-        const { tab } = msg.payload;
-        this.state.tabs = [...this.state.tabs, tab];
-        this.state.activeTabId = tab.id;
-        this.postMessage({ type: "tab_create", payload: msg.payload });
-        this.panel?.reveal(vscode.ViewColumn.Active);
-        break;
-      }
-      case "tab_close": {
-        const { tabId } = msg.payload;
-        const newTabs = this.state.tabs.filter((t) => t.id !== tabId);
-        const newActiveId = this.state.activeTabId === tabId ? newTabs.length > 0 ? newTabs[newTabs.length - 1].id : null : this.state.activeTabId;
-        this.state.tabs = newTabs;
-        this.state.activeTabId = newActiveId;
-        this.postMessage({ type: "tab_close", payload: msg.payload });
-        break;
-      }
-      case "tab_switch": {
-        const { tabId } = msg.payload;
-        this.state.activeTabId = tabId;
-        this.postMessage({ type: "tab_switch", payload: msg.payload });
-        break;
-      }
       case "canvas_update": {
-        const { tabId, nodes, edges, direction } = msg.payload;
-        this.state.tabs = this.state.tabs.map(
-          (t) => t.id === tabId ? { ...t, canvas: { nodes, edges, direction } } : t
-        );
-        this.postMessage({ type: "canvas_update", payload: msg.payload });
+        const payload = msg.payload;
+        this.state.nodes = payload.nodes;
+        this.state.edges = payload.edges;
+        this.state.direction = payload.direction;
+        this.postMessage({ type: "canvas_update", payload });
         break;
       }
       case "consumed_update": {
-        const { tabId, consumed, lastConsumedAt, canvasSource } = msg.payload;
-        this.state.tabs = this.state.tabs.map(
-          (t) => t.id === tabId ? { ...t, consumed, lastConsumedAt, canvasSource } : t
-        );
-        this.postMessage({ type: "consumed_update", payload: msg.payload });
+        const payload = msg.payload;
+        this.state.consumed = payload.consumed;
+        this.state.lastConsumedAt = payload.lastConsumedAt;
+        this.state.canvasSource = payload.canvasSource;
+        this.postMessage({ type: "consumed_update", payload });
+        break;
+      }
+      case "create_view": {
+        const payload = msg.payload;
+        this.state.title = payload.title;
+        this.postMessage({ type: "create_view", payload });
+        this.panel?.reveal(vscode.ViewColumn.Active);
         break;
       }
       case "viewport_update": {
-        const { tabId, viewport } = msg.payload;
-        this.state.tabs = this.state.tabs.map(
-          (t) => t.id === tabId ? { ...t, viewport } : t
-        );
-        this.postMessage({ type: "viewport_update", payload: msg.payload });
+        const payload = msg.payload;
+        this.state.viewport = payload.viewport;
+        this.postMessage({ type: "viewport_update", payload });
         break;
       }
       case "reconnect_sync": {
-        const { tabs, activeTabId } = msg.payload;
-        this.state.tabs = tabs;
-        this.state.activeTabId = activeTabId;
-        this.postMessage({ type: "reconnect_sync", payload: msg.payload });
+        const payload = msg.payload;
+        this.state.nodes = payload.canvas.nodes;
+        this.state.edges = payload.canvas.edges;
+        this.state.direction = payload.canvas.direction;
+        this.state.consumed = payload.consumed.consumed;
+        this.state.lastConsumedAt = payload.consumed.lastConsumedAt;
+        this.state.canvasSource = payload.consumed.canvasSource;
+        this.state.title = payload.title;
+        this.state.viewport = payload.viewport;
+        this.postMessage({ type: "reconnect_sync", payload });
         break;
       }
     }
@@ -3959,51 +3953,39 @@ var PanelManager = class {
     }
   }
   handleWebviewMessage(msg) {
-    const activeTabId = this.state.activeTabId;
     let wsMsg;
     switch (msg.type) {
-      case "canvas_edit": {
-        if (!activeTabId) return;
-        const payload = msg.payload;
-        wsMsg = { type: "canvas_edit", payload: { tabId: activeTabId, ...payload } };
+      case "canvas_edit":
+        wsMsg = { type: "canvas_edit", payload: msg.payload };
         break;
-      }
-      case "reset_consumed": {
-        if (!activeTabId) return;
-        wsMsg = { type: "reset_consumed", payload: { tabId: activeTabId } };
+      case "reset_consumed":
+        wsMsg = { type: "reset_consumed" };
         break;
-      }
-      case "viewport_edit": {
-        if (!activeTabId) return;
-        const payload = msg.payload;
-        wsMsg = { type: "viewport_edit", payload: { tabId: activeTabId, ...payload } };
+      case "viewport_edit":
+        wsMsg = { type: "viewport_edit", payload: msg.payload };
         break;
-      }
-      case "tab_switch": {
-        const payload = msg.payload;
-        this.state.activeTabId = payload.tabId;
-        wsMsg = { type: "tab_switch", payload };
-        break;
-      }
-      case "tab_close": {
-        const payload = msg.payload;
-        wsMsg = { type: "tab_close", payload };
-        break;
-      }
     }
     this.wsClient.send(wsMsg);
   }
   /** 发送当前完整状态给 Webview（面板打开时） */
   sendCurrentState() {
-    if (this.state.tabs.length > 0) {
-      this.postMessage({
-        type: "reconnect_sync",
-        payload: {
-          tabs: this.state.tabs,
-          activeTabId: this.state.activeTabId
-        }
-      });
-    }
+    this.postMessage({
+      type: "reconnect_sync",
+      payload: {
+        canvas: {
+          nodes: this.state.nodes,
+          edges: this.state.edges,
+          direction: this.state.direction
+        },
+        consumed: {
+          consumed: this.state.consumed,
+          lastConsumedAt: this.state.lastConsumedAt,
+          canvasSource: this.state.canvasSource
+        },
+        title: this.state.title,
+        viewport: this.state.viewport ?? { x: 0, y: 0, zoom: 1 }
+      }
+    });
     this.postMessage({
       type: "connection_status",
       payload: this.state.connectionStatus

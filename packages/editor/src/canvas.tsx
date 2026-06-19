@@ -30,6 +30,8 @@ import '@xyflow/react/dist/style.css';
 
 import {
   serializeMermaid,
+  parseMermaid,
+  layoutCanvas,
   type MermaidShapeType,
   type MermaidNode,
   type MermaidEdge,
@@ -83,6 +85,9 @@ function CanvasInner(props: CanvasProps) {
   // 内联编辑状态
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null);
+
+  // 代码编辑错误信息（解析失败时显示）
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   // ref 保存最新 React Flow state，供 onCanvasEdit 读取
   const nodesRef = useRef(nodes);
@@ -209,6 +214,9 @@ function CanvasInner(props: CanvasProps) {
         x: event.clientX,
         y: event.clientY,
       });
+      // 以鼠标位置为节点中心（默认节点尺寸 140×50）
+      position.x -= 70;
+      position.y -= 25;
 
       const newNode: MermaidNode = {
         id: generateNodeId(),
@@ -304,6 +312,27 @@ function CanvasInner(props: CanvasProps) {
     }, 0);
   }, [setEdges, onCanvasEdit, getCanvasSnapshot]);
 
+  // 代码编辑：解析 Mermaid 代码 → 更新画布
+  const handleCodeChange = useCallback((code: string) => {
+    const result = parseMermaid(code);
+    if (result.success) {
+      setNodes(result.canvas.nodes);
+      setEdges(result.canvas.edges);
+      directionRef.current = result.canvas.direction;
+      setCodeError(null);
+      setTimeout(() => {
+        onCanvasEdit({
+          nodes: result.canvas.nodes,
+          edges: result.canvas.edges,
+          direction: result.canvas.direction,
+        });
+      }, 0);
+    } else {
+      // 解析失败：显示错误，保留原画布状态
+      setCodeError(result.errors.map((e) => e.message).join('; '));
+    }
+  }, [setNodes, setEdges, onCanvasEdit]);
+
   // 选中变化 → 更新选中 ID（属性面板从 nodes/edges 派生选中对象）
   const onSelectionChange = useCallback(({ nodes: selNodes, edges: selEdges }: { nodes: Node[]; edges: Edge[] }) => {
     setSelectedNodeId(selNodes.length === 1 ? selNodes[0].id : null);
@@ -391,15 +420,25 @@ function CanvasInner(props: CanvasProps) {
         mermaidCode={mermaidCode}
         onDirectionChange={(dir) => {
           directionRef.current = dir;
+          // 重新布局：方向变更时用 dagre 重新计算节点位置
+          const newNodes = [...nodesRef.current];
+          layoutCanvas(newNodes, edgesRef.current, dir);
+          setNodes(newNodes);
           onDirectionChange(dir);
-          onCanvasEdit({ ...getCanvasSnapshot(), direction: dir });
+          setTimeout(() => {
+            onCanvasEdit({
+              nodes: newNodes,
+              edges: edgesRef.current,
+              direction: dir,
+            });
+          }, 0);
         }}
       />
 
       <div className="main-content">
         {/* 左侧面板：代码编辑器（上）+ 节点库（下）— 设计依据：模块3 L145-191 */}
         <div className="left-panel">
-          <CodeEditor code={mermaidCode} />
+          <CodeEditor code={mermaidCode} onCodeChange={handleCodeChange} error={codeError} />
           <NodeLibrary onAddNode={addNodeFromLibrary} />
         </div>
 

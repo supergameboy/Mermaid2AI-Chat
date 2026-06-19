@@ -78,11 +78,14 @@ export class WsClient {
       const ws = new WebSocket(this.url);
       this.ws = ws;
 
-      ws.onopen = () => {
+      // 使用 ws.on('event') EventEmitter 风格，不使用 ws.onevent 属性赋值
+      // 原因：esbuild 打包 ws 库时丢失了 onopen/onclose/onerror 属性的 setter，
+      //       在严格模式下 ws.onopen = callback 会抛出 TypeError
+      ws.on('open', () => {
         this.reconnectAttempt = 0;
         this.setStatus('connected');
         console.log('[VSCode-WS] 已连接到 Mermaid 服务端');
-      };
+      });
 
       ws.on('message', (data: WebSocket.RawData) => {
         let msg: WsServerMessage;
@@ -96,17 +99,17 @@ export class WsClient {
         }
       });
 
-      ws.onclose = () => {
+      ws.on('close', () => {
         this.ws = null;
         this.setStatus('disconnected');
         if (this.shouldReconnect) {
           this.scheduleReconnect();
         }
-      };
+      });
 
-      ws.onerror = (err: { message?: string }) => {
-        console.error('[VSCode-WS] 错误:', err.message ?? err);
-      };
+      ws.on('error', (err: Error) => {
+        console.error('[VSCode-WS] 错误:', err.message);
+      });
     } catch (e) {
       console.error('[VSCode-WS] 连接失败:', e);
       this.scheduleReconnect();

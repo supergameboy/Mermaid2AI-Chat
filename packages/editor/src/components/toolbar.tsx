@@ -40,6 +40,7 @@ export function Toolbar({ direction, onDirectionChange, mermaidCode }: ToolbarPr
           value={direction}
           onChange={(e) => onDirectionChange(e.target.value as FlowchartDirection)}
           className="toolbar-select"
+          title="切换流程图方向并重新布局"
         >
           {DIRECTIONS.map((dir) => (
             <option key={dir} value={dir}>{dir}</option>

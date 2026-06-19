@@ -468,7 +468,7 @@ function getShapeSyntax(shape) {
   return SHAPE_SYNTAX_MAP[shape] ?? SHAPE_SYNTAX_MAP.rect;
 }
 function escapeLabel(label) {
-  return label.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\[/g, "\\[").replace(/\]/g, "\\]").replace(/\{/g, "\\{").replace(/\}/g, "\\}").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+  return label.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\[/g, "\\[").replace(/\]/g, "\\]").replace(/\{/g, "\\{").replace(/\}/g, "\\}").replace(/\(/g, "\\(").replace(/\)/g, "\\)").replace(/\n/g, "<br/>");
 }
 function unescapeLabel(label) {
   return label.replace(/\\(.)/g, "$1");

@@ -75,6 +75,16 @@ describe('serializeNode — 标签转义', () => {
     const node = makeNode('A', 'rect', '中文测试🎉');
     expect(serializeNode(node)).toBe('A[中文测试🎉]');
   });
+
+  it('should serialize newline as <br/>', () => {
+    const node = makeNode('A', 'rect', '第一行\n第二行');
+    expect(serializeNode(node)).toBe('A[第一行<br/>第二行]');
+  });
+
+  it('should serialize multiple newlines as multiple <br/>', () => {
+    const node = makeNode('A', 'rect', '行1\n行2\n行3');
+    expect(serializeNode(node)).toBe('A[行1<br/>行2<br/>行3]');
+  });
 });
 
 describe('serializeNode — fallback 行为', () => {

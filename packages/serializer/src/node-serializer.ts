@@ -52,7 +52,8 @@ function escapeLabel(label: string): string {
     .replace(/\{/g, '\\{')
     .replace(/\}/g, '\\}')
     .replace(/\(/g, '\\(')
-    .replace(/\)/g, '\\)');
+    .replace(/\)/g, '\\)')
+    .replace(/\n/g, '<br/>');
 }
 
 /**

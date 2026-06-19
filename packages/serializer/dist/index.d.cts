@@ -72,15 +72,6 @@ interface ConsumedState {
     lastConsumedAt: number | null;
     canvasSource: CanvasSource;
 }
-interface Tab {
-    id: string;
-    title: string | null;
-    canvas: CanvasState;
-    consumed: boolean;
-    canvasSource: CanvasSource;
-    lastConsumedAt: number | null;
-    viewport: Viewport;
-}
 interface ParseSuccessResult {
     success: true;
     canvas: CanvasState;
@@ -230,4 +221,4 @@ declare const idGenerator: IdGenerator;
  */
 declare function layoutCanvas(nodes: MermaidNode[], edges: MermaidEdge[], direction: FlowchartDirection): void;
 
-export { type CanvasSource, type CanvasState, type ConsumedState, type EdgeMarker, ErrorCollector, type FlowchartDirection, IdGenerator, type MermaidEdge, type MermaidEdgeData, type MermaidEdgeStyle, type MermaidNode, type MermaidNodeData, type MermaidShapeType, type NodeStyle, type ParseError, type ParseFailureResult, type ParseResult, type ParseSuccessResult, type SerializeResult, type Tab, type Viewport, getEdgeSyntax, getShapeSyntax, idGenerator, layoutCanvas, parseMermaid, serializeEdge, serializeMermaid, serializeNode, unescapeLabel };
+export { type CanvasSource, type CanvasState, type ConsumedState, type EdgeMarker, ErrorCollector, type FlowchartDirection, IdGenerator, type MermaidEdge, type MermaidEdgeData, type MermaidEdgeStyle, type MermaidNode, type MermaidNodeData, type MermaidShapeType, type NodeStyle, type ParseError, type ParseFailureResult, type ParseResult, type ParseSuccessResult, type SerializeResult, type Viewport, getEdgeSyntax, getShapeSyntax, idGenerator, layoutCanvas, parseMermaid, serializeEdge, serializeMermaid, serializeNode, unescapeLabel };

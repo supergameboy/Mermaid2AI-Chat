@@ -49,12 +49,19 @@ function ShapeRenderer({
   color: string;
   selected: boolean;
 }) {
+  // 拆分 label 为多行（支持 <br>、<br/>、\n）
+  const lines = label.split(/<br\s*\/?>|\n/i);
+  const lineCount = lines.length;
+  const lineHeight = 18;
+  const baseHeight = 48;
+
   // 文本内容宽度估算（每字符约 8px + padding）
   const charWidth = 8;
   const padding = 24;
-  const textWidth = Math.max(label.length * charWidth, 60);
+  const maxLineLength = Math.max(...lines.map(l => l.length));
+  const textWidth = Math.max(maxLineLength * charWidth, 60);
   const width = textWidth + padding * 2;
-  const height = 48;
+  const height = baseHeight + (lineCount - 1) * lineHeight;
   const strokeWidth = selected ? 3 : 2;
   const strokeColor = selected ? '#1890ff' : stroke;
 
@@ -67,12 +74,27 @@ function ShapeRenderer({
     pointerEvents: 'none',
   };
 
+  // 多行文本渲染辅助函数 — 将 label 拆分为多个 tspan 实现垂直居中
+  const renderText = (textX: number, textY: number = height / 2) => (
+    <text x={textX} y={textY} style={commonTextStyle}>
+      {lines.map((line, i) => (
+        <tspan
+          key={i}
+          x={textX}
+          dy={i === 0 ? -(lineCount - 1) * lineHeight / 2 : lineHeight}
+        >
+          {line}
+        </tspan>
+      ))}
+    </text>
+  );
+
   switch (shape) {
     case 'rect':
       return (
         <svg width={width} height={height} style={{ display: 'block' }}>
           <rect x={1} y={1} width={width - 2} height={height - 2} fill={fill} stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x={width / 2} y={height / 2} style={commonTextStyle}>{label}</text>
+          {renderText(width / 2)}
         </svg>
       );
 
@@ -80,7 +102,7 @@ function ShapeRenderer({
       return (
         <svg width={width} height={height} style={{ display: 'block' }}>
           <rect x={1} y={1} width={width - 2} height={height - 2} rx={12} ry={12} fill={fill} stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x={width / 2} y={height / 2} style={commonTextStyle}>{label}</text>
+          {renderText(width / 2)}
         </svg>
       );
 
@@ -88,7 +110,7 @@ function ShapeRenderer({
       return (
         <svg width={width} height={height} style={{ display: 'block' }}>
           <rect x={1} y={1} width={width - 2} height={height - 2} rx={height / 2} ry={height / 2} fill={fill} stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x={width / 2} y={height / 2} style={commonTextStyle}>{label}</text>
+          {renderText(width / 2)}
         </svg>
       );
 
@@ -101,7 +123,7 @@ function ShapeRenderer({
       return (
         <svg width={width} height={height} style={{ display: 'block' }}>
           <polygon points={points} fill={fill} stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x={cx} y={cy} style={commonTextStyle}>{label}</text>
+          {renderText(cx)}
         </svg>
       );
     }
@@ -112,7 +134,7 @@ function ShapeRenderer({
       return (
         <svg width={size} height={size} style={{ display: 'block' }}>
           <circle cx={size / 2} cy={size / 2} r={r} fill={fill} stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x={size / 2} y={size / 2} style={commonTextStyle}>{label}</text>
+          {renderText(size / 2, size / 2)}
         </svg>
       );
     }
@@ -130,7 +152,7 @@ function ShapeRenderer({
           />
           {/* 顶部椭圆 */}
           <ellipse cx={width / 2} cy={ellipseRy} rx={width / 2 - 1} ry={ellipseRy} fill={fill} stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x={width / 2} y={height / 2} style={commonTextStyle}>{label}</text>
+          {renderText(width / 2)}
         </svg>
       );
     }
@@ -141,7 +163,7 @@ function ShapeRenderer({
       return (
         <svg width={width} height={height} style={{ display: 'block' }}>
           <polygon points={points} fill={fill} stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x={width / 2} y={height / 2} style={commonTextStyle}>{label}</text>
+          {renderText(width / 2)}
         </svg>
       );
     }
@@ -152,7 +174,7 @@ function ShapeRenderer({
       return (
         <svg width={width} height={height} style={{ display: 'block' }}>
           <polygon points={points} fill={fill} stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x={width / 2} y={height / 2} style={commonTextStyle}>{label}</text>
+          {renderText(width / 2)}
         </svg>
       );
     }
@@ -164,7 +186,7 @@ function ShapeRenderer({
           <rect x={1} y={1} width={width - 2} height={height - 2} fill={fill} stroke={strokeColor} strokeWidth={strokeWidth} />
           <line x1={innerLineX} y1={1} x2={innerLineX} y2={height - 1} stroke={strokeColor} strokeWidth={strokeWidth} />
           <line x1={width - innerLineX} y1={1} x2={width - innerLineX} y2={height - 1} stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x={width / 2} y={height / 2} style={commonTextStyle}>{label}</text>
+          {renderText(width / 2)}
         </svg>
       );
     }
@@ -177,7 +199,7 @@ function ShapeRenderer({
         <svg width={size} height={size} style={{ display: 'block' }}>
           <circle cx={size / 2} cy={size / 2} r={r} fill={fill} stroke={strokeColor} strokeWidth={strokeWidth} />
           <circle cx={size / 2} cy={size / 2} r={innerR} fill="none" stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x={size / 2} y={size / 2} style={commonTextStyle}>{label}</text>
+          {renderText(size / 2, size / 2)}
         </svg>
       );
     }
@@ -189,7 +211,7 @@ function ShapeRenderer({
       return (
         <svg width={width} height={height} style={{ display: 'block' }}>
           <polygon points={points} fill={fill} stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x={width / 2 - offset / 2} y={height / 2} style={commonTextStyle}>{label}</text>
+          {renderText(width / 2 - offset / 2)}
         </svg>
       );
     }
@@ -201,7 +223,7 @@ function ShapeRenderer({
       return (
         <svg width={width} height={height} style={{ display: 'block' }}>
           <polygon points={points} fill={fill} stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x={width / 2} y={height / 2} style={commonTextStyle}>{label}</text>
+          {renderText(width / 2)}
         </svg>
       );
     }
@@ -213,7 +235,7 @@ function ShapeRenderer({
       return (
         <svg width={width} height={height} style={{ display: 'block' }}>
           <polygon points={points} fill={fill} stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x={width / 2} y={height / 2} style={commonTextStyle}>{label}</text>
+          {renderText(width / 2)}
         </svg>
       );
     }
@@ -225,7 +247,7 @@ function ShapeRenderer({
       return (
         <svg width={width} height={height} style={{ display: 'block' }}>
           <polygon points={points} fill={fill} stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x={width / 2} y={height / 2} style={commonTextStyle}>{label}</text>
+          {renderText(width / 2)}
         </svg>
       );
     }
@@ -234,7 +256,7 @@ function ShapeRenderer({
       return (
         <svg width={width} height={height} style={{ display: 'block' }}>
           <rect x={1} y={1} width={width - 2} height={height - 2} fill={fill} stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x={width / 2} y={height / 2} style={commonTextStyle}>{label}</text>
+          {renderText(width / 2)}
         </svg>
       );
   }

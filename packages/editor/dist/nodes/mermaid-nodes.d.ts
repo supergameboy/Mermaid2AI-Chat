@@ -1,7 +1,13 @@
 import { type NodeProps, type Node } from '@xyflow/react';
-import type { MermaidShapeType, MermaidNodeData } from '@mermaid-editor/serializer';
+import type { FlowchartDirection, MermaidShapeType, MermaidNodeData } from '@mermaid2aichat/serializer';
 /** React Flow 节点类型，data 为 MermaidNodeData */
 type MermaidFlowNode = Node<MermaidNodeData, MermaidShapeType>;
+/** 连接模式：'direction' 按方向连接 | 'nearest' 就近连接 */
+export type ConnectionMode = 'direction' | 'nearest';
+/** 画布方向 Context — 由 Canvas 提供，节点组件消费，用于动态设置 Handle 位置 */
+export declare const DirectionContext: import("react").Context<FlowchartDirection>;
+/** 连接模式 Context — 由 Canvas 提供，节点组件消费，用于根据模式渲染 Handle */
+export declare const ConnectionModeContext: import("react").Context<ConnectionMode>;
 /** 通用节点组件 — 根据形状渲染不同 SVG 形状 */
 export declare const MermaidNodeComponent: import("react").MemoExoticComponent<({ data, selected }: NodeProps<MermaidFlowNode>) => import("react").JSX.Element>;
 /** 节点类型注册 — 14种形状 */

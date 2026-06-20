@@ -1,7 +1,7 @@
 /**
  * editor 包类型定义 — Canvas 组件接口
  */
-import type { CanvasSource, FlowchartDirection, MermaidEdge, MermaidNode, Viewport } from '@mermaid-editor/serializer';
+import type { CanvasSource, FlowchartDirection, MermaidEdge, MermaidNode, Viewport } from '@mermaid2aichat/serializer';
 /** 连接状态 */
 export type ConnectionStatusType = 'connected' | 'reconnecting' | 'disconnected';
 /** 画布快照（用于发送到服务端） */

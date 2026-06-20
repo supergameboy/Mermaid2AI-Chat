@@ -1,23 +1,24 @@
 /**
- * Mermaid 反向编辑器 — VSCode Webview 应用
+ * Mermaid2AIChat — VSCode Webview 应用
  *
- * 职责：接收 Extension 转发的服务端状态，渲染 Canvas，将用户编辑转发给 Extension
+ * 职责：接收 Extension 转发的服务端状态，渲染 Canvas + TabBar，将用户编辑转发给 Extension
  *
  * 数据流：
- * - 服务端 → Extension → postMessage → Canvas syncNodes/syncEdges
- * - Canvas onCanvasEdit → postMessage → Extension → WebSocket → 服务端
+ * - 服务端 → Extension → postMessage → Canvas/TabBar 同步
+ * - Canvas/TabBar 操作 → postMessage → Extension → WebSocket → 服务端
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Canvas } from '@mermaid-editor/editor';
-import type { CanvasSnapshot, ConnectionStatusType } from '@mermaid-editor/editor';
-import '@mermaid-editor/editor/styles.css';
+import { Canvas, TabBar } from '@mermaid2aichat/editor';
+import type { CanvasSnapshot, ConnectionStatusType } from '@mermaid2aichat/editor';
+import '@mermaid2aichat/editor/styles.css';
 import type {
   CanvasSource,
   FlowchartDirection,
   MermaidEdge,
   MermaidNode,
   Viewport,
-} from '@mermaid-editor/serializer';
+  ViewSummary,
+} from '@mermaid2aichat/serializer';
 
 // === VSCode API（由 Extension 注入到 window.vscode） ===
 declare global {
@@ -30,7 +31,7 @@ declare global {
 
 // === Extension → Webview 消息类型 ===
 interface ExtensionMessage {
-  type: 'canvas_update' | 'consumed_update' | 'create_view' | 'reconnect_sync' | 'connection_status' | 'viewport_update';
+  type: 'canvas_update' | 'consumed_update' | 'viewport_update' | 'views_update' | 'active_view_update' | 'reconnect_sync' | 'connection_status';
   payload: unknown;
 }
 
@@ -50,14 +51,30 @@ interface ViewportPayload {
   viewport: Viewport;
 }
 
-interface ReconnectSyncPayload {
+interface ViewsUpdatePayload {
+  views: ViewSummary[];
+  activeViewId: string | null;
+}
+
+interface ActiveViewPayload {
+  viewId: string;
   canvas: CanvasPayload;
   consumed: ConsumedPayload;
-  title: string | null;
   viewport: Viewport;
+  title: string | null;
+}
+
+interface ReconnectSyncPayload {
+  views: ViewSummary[];
+  activeViewId: string | null;
+  activeView: ActiveViewPayload | null;
 }
 
 export default function App() {
+  // 视图列表
+  const [views, setViews] = useState<ViewSummary[]>([]);
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  // 活动视图内容
   const [nodes, setNodes] = useState<MermaidNode[]>([]);
   const [edges, setEdges] = useState<MermaidEdge[]>([]);
   const [direction, setDirection] = useState<FlowchartDirection>('TD');
@@ -69,6 +86,10 @@ export default function App() {
 
   // 接收 Extension 消息
   useEffect(() => {
+    // 通知 extension：webview 已挂载，可以发送初始状态
+    // 解决竞态条件：sendCurrentState 在 webview 挂载前调用会导致消息丢失
+    window.vscode?.postMessage({ type: 'ready' });
+
     const handler = (event: MessageEvent) => {
       const msg = event.data as ExtensionMessage;
       if (!msg || !msg.type) return;
@@ -88,17 +109,20 @@ export default function App() {
           setCanvasSource(payload.canvasSource);
           break;
         }
-        case 'create_view': {
-          // create_view 的画布数据已通过 canvas_update 同步，这里无需额外处理
-          break;
-        }
         case 'viewport_update': {
           const payload = msg.payload as ViewportPayload;
           setViewport(payload.viewport);
           break;
         }
-        case 'reconnect_sync': {
-          const payload = msg.payload as ReconnectSyncPayload;
+        case 'views_update': {
+          const payload = msg.payload as ViewsUpdatePayload;
+          setViews(payload.views);
+          setActiveViewId(payload.activeViewId);
+          break;
+        }
+        case 'active_view_update': {
+          const payload = msg.payload as ActiveViewPayload;
+          setActiveViewId(payload.viewId);
           setNodes(payload.canvas.nodes);
           setEdges(payload.canvas.edges);
           setDirection(payload.canvas.direction);
@@ -106,6 +130,22 @@ export default function App() {
           setLastConsumedAt(payload.consumed.lastConsumedAt);
           setCanvasSource(payload.consumed.canvasSource);
           setViewport(payload.viewport);
+          break;
+        }
+        case 'reconnect_sync': {
+          const payload = msg.payload as ReconnectSyncPayload;
+          setViews(payload.views);
+          setActiveViewId(payload.activeViewId);
+          if (payload.activeView) {
+            const av = payload.activeView;
+            setNodes(av.canvas.nodes);
+            setEdges(av.canvas.edges);
+            setDirection(av.canvas.direction);
+            setConsumed(av.consumed.consumed);
+            setLastConsumedAt(av.consumed.lastConsumedAt);
+            setCanvasSource(av.consumed.canvasSource);
+            setViewport(av.viewport);
+          }
           break;
         }
         case 'connection_status': {
@@ -119,7 +159,7 @@ export default function App() {
     return () => window.removeEventListener('message', handler);
   }, []);
 
-  // Canvas 编辑 → 发送给 Extension
+  // === Canvas 编辑 → 发送给 Extension ===
   const handleCanvasEdit = useCallback(
     (canvas: CanvasSnapshot) => {
       window.vscode?.postMessage({
@@ -130,7 +170,6 @@ export default function App() {
     []
   );
 
-  // 方向变化
   const handleDirectionChange = useCallback(
     (dir: FlowchartDirection) => {
       setDirection(dir);
@@ -138,7 +177,6 @@ export default function App() {
     []
   );
 
-  // 重置消费状态
   const handleResetConsumed = useCallback(() => {
     setConsumed(false);
     window.vscode?.postMessage({
@@ -146,7 +184,6 @@ export default function App() {
     });
   }, []);
 
-  // 视口变化 → 发送给 Extension
   const handleViewportChange = useCallback(
     (vp: Viewport) => {
       window.vscode?.postMessage({
@@ -157,20 +194,67 @@ export default function App() {
     []
   );
 
+  // === TabBar 视图操作 → 发送给 Extension ===
+  const handleSwitchView = useCallback((viewId: string) => {
+    window.vscode?.postMessage({
+      type: 'switch_view',
+      viewId,
+    });
+  }, []);
+
+  const handleCreateView = useCallback(() => {
+    window.vscode?.postMessage({
+      type: 'create_view',
+    });
+  }, []);
+
+  const handleCloseView = useCallback((viewId: string) => {
+    window.vscode?.postMessage({
+      type: 'close_view',
+      viewId,
+    });
+  }, []);
+
+  const handleRenameView = useCallback((viewId: string, title: string) => {
+    window.vscode?.postMessage({
+      type: 'rename_view',
+      viewId,
+      title,
+    });
+  }, []);
+
+  const handleReorderViews = useCallback((orderedIds: string[]) => {
+    window.vscode?.postMessage({
+      type: 'reorder_views',
+      orderedIds,
+    });
+  }, []);
+
   return (
-    <Canvas
-      syncNodes={nodes}
-      syncEdges={edges}
-      syncDirection={direction}
-      syncViewport={viewport}
-      consumed={consumed}
-      canvasSource={canvasSource}
-      lastConsumedAt={lastConsumedAt}
-      connectionStatus={connectionStatus}
-      onCanvasEdit={handleCanvasEdit}
-      onDirectionChange={handleDirectionChange}
-      onResetConsumed={handleResetConsumed}
-      onViewportChange={handleViewportChange}
-    />
+    <div className="app-container">
+      <TabBar
+        views={views}
+        activeViewId={activeViewId}
+        onSwitchView={handleSwitchView}
+        onCreateView={handleCreateView}
+        onCloseView={handleCloseView}
+        onRenameView={handleRenameView}
+        onReorderViews={handleReorderViews}
+      />
+      <Canvas
+        syncNodes={nodes}
+        syncEdges={edges}
+        syncDirection={direction}
+        syncViewport={viewport}
+        consumed={consumed}
+        canvasSource={canvasSource}
+        lastConsumedAt={lastConsumedAt}
+        connectionStatus={connectionStatus}
+        onCanvasEdit={handleCanvasEdit}
+        onDirectionChange={handleDirectionChange}
+        onResetConsumed={handleResetConsumed}
+        onViewportChange={handleViewportChange}
+      />
+    </div>
   );
 }

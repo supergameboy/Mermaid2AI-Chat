@@ -1,4 +1,4 @@
-import type { MermaidShapeType } from '@mermaid-editor/serializer';
+import type { MermaidShapeType } from '@mermaid2aichat/serializer';
 interface NodeLibraryProps {
     onAddNode: (shape: MermaidShapeType) => void;
 }

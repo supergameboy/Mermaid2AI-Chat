@@ -1,5 +1,5 @@
 /**
- * Mermaid 反向编辑器 — React 入口
+ * Mermaid2AIChat — React 入口
  */
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';

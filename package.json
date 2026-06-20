@@ -1,8 +1,8 @@
 {
-  "name": "mermaid-flow-editor",
+  "name": "mermaid2aichat",
   "version": "1.0.0",
   "private": true,
-  "description": "Mermaid 反向编辑器 — 通过编辑可视化流程元素，反向输出 mermaid 代码，配套 MCP 服务和 SKILL",
+  "description": "Mermaid2AIChat — 通过 MCP 协议将可视化流程图编辑器与 AI 对话无缝集成，配套 MCP 服务和 SKILL",
   "type": "module",
   "scripts": {
     "dev": "pnpm -r --parallel run dev",

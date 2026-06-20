@@ -20,7 +20,7 @@ importers:
 
   packages/editor:
     dependencies:
-      '@mermaid-editor/serializer':
+      '@mermaid2aichat/serializer':
         specifier: workspace:*
         version: link:../serializer
       '@xyflow/react':
@@ -76,7 +76,7 @@ importers:
 
   packages/server:
     dependencies:
-      '@mermaid-editor/serializer':
+      '@mermaid2aichat/serializer':
         specifier: workspace:*
         version: link:../serializer
       '@modelcontextprotocol/sdk':
@@ -119,14 +119,14 @@ importers:
 
   packages/vscode-extension:
     dependencies:
-      '@mermaid-editor/serializer':
+      '@mermaid2aichat/serializer':
         specifier: workspace:*
         version: link:../serializer
       ws:
         specifier: ^8.16.0
         version: 8.21.0
     devDependencies:
-      '@mermaid-editor/editor':
+      '@mermaid2aichat/editor':
         specifier: workspace:*
         version: link:../editor
       '@types/react':
@@ -162,10 +162,10 @@ importers:
 
   packages/web-editor:
     dependencies:
-      '@mermaid-editor/editor':
+      '@mermaid2aichat/editor':
         specifier: workspace:*
         version: link:../editor
-      '@mermaid-editor/serializer':
+      '@mermaid2aichat/serializer':
         specifier: workspace:*
         version: link:../serializer
       '@xyflow/react':

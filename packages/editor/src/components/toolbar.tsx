@@ -1,15 +1,18 @@
-/** 工具栏 — 方向切换 + 导出 */
-import type { FlowchartDirection } from '@mermaid-editor/serializer';
+/** 工具栏 — 方向切换 + 连接模式 + 导出 */
+import type { FlowchartDirection } from '@mermaid2aichat/serializer';
+import type { ConnectionMode } from '../nodes/mermaid-nodes.js';
 
 interface ToolbarProps {
   direction: FlowchartDirection;
   onDirectionChange: (dir: FlowchartDirection) => void;
   mermaidCode: string;
+  connectionMode: ConnectionMode;
+  onConnectionModeChange: (mode: ConnectionMode) => void;
 }
 
 const DIRECTIONS: FlowchartDirection[] = ['TB', 'TD', 'BT', 'RL', 'LR'];
 
-export function Toolbar({ direction, onDirectionChange, mermaidCode }: ToolbarProps) {
+export function Toolbar({ direction, onDirectionChange, mermaidCode, connectionMode, onConnectionModeChange }: ToolbarProps) {
   // 导出 mermaid 代码为 .mmd 文件
   const handleExport = () => {
     const blob = new Blob([mermaidCode], { type: 'text/plain;charset=utf-8' });
@@ -48,7 +51,19 @@ export function Toolbar({ direction, onDirectionChange, mermaidCode }: ToolbarPr
         </select>
       </div>
       <div className="toolbar-section">
-        <h1 className="toolbar-title">Mermaid 反向编辑器</h1>
+        <span className="toolbar-label">连线:</span>
+        <select
+          value={connectionMode}
+          onChange={(e) => onConnectionModeChange(e.target.value as ConnectionMode)}
+          className="toolbar-select"
+          title="选择节点连线模式：按方向连接或就近连接"
+        >
+          <option value="direction">按方向</option>
+          <option value="nearest">就近</option>
+        </select>
+      </div>
+      <div className="toolbar-section">
+        <h1 className="toolbar-title">Mermaid2AIChat</h1>
       </div>
       <div className="toolbar-section toolbar-actions">
         <button type="button" className="toolbar-btn" onClick={handleCopy} title="复制 Mermaid 代码到剪贴板">

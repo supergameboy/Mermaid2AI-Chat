@@ -10,7 +10,7 @@ export default defineConfig({
       fileName: 'index',
     },
     rollupOptions: {
-      external: ['react', 'react-dom', 'react/jsx-runtime', '@xyflow/react', '@mermaid-editor/serializer'],
+      external: ['react', 'react-dom', 'react/jsx-runtime', '@xyflow/react', '@mermaid2aichat/serializer'],
     },
     cssCodeSplit: false,
   },

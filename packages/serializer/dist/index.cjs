@@ -176,7 +176,7 @@ var DIRECTION_MAP = {
 };
 function layoutCanvas(nodes, edges, direction) {
   if (nodes.length === 0) {
-    return;
+    return [];
   }
   const graph = new import_dagre.default.graphlib.Graph();
   graph.setGraph({
@@ -194,17 +194,21 @@ function layoutCanvas(nodes, edges, direction) {
     graph.setEdge(edge.source, edge.target);
   }
   import_dagre.default.layout(graph);
-  for (const node of nodes) {
+  return nodes.map((node) => {
     const dagreNode = graph.node(node.id);
-    if (dagreNode) {
-      const width = node.width ?? NODE_SIZE.width;
-      const height = node.height ?? NODE_SIZE.height;
-      node.position = {
+    if (!dagreNode) {
+      return node;
+    }
+    const width = node.width ?? NODE_SIZE.width;
+    const height = node.height ?? NODE_SIZE.height;
+    return {
+      ...node,
+      position: {
         x: dagreNode.x - width / 2,
         y: dagreNode.y - height / 2
-      };
-    }
-  }
+      }
+    };
+  });
 }
 
 // src/ast-mapper.ts
@@ -479,10 +483,10 @@ function parseMermaid(source, errorCollector) {
     });
     edgeIndex++;
   }
-  layoutCanvas(nodes, edges, direction);
+  const laidOutNodes = layoutCanvas(nodes, edges, direction);
   return {
     success: !errors.hasErrors(),
-    canvas: { nodes, edges, direction },
+    canvas: { nodes: laidOutNodes, edges, direction },
     errors: errors.getErrors()
   };
 }

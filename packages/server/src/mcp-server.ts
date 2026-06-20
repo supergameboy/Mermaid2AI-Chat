@@ -1,7 +1,12 @@
 /**
  * MCP 服务端 — Streamable HTTP 端点、JSON-RPC 请求路由
  *
- * 有状态多会话模式：每个 MCP 会话独立 transport + McpServer 实例。
+ * 多工作区架构：
+ * - 通过 HTTP header `x-workspace-root` 路由到对应工作区
+ * - 每个 MCP 会话独立 transport + McpServer 实例
+ * - sessionId 按 MCP 连接生成（WeakMap<McpServer, string>）
+ *
+ * 端点:
  * - POST /mcp（无 session id）→ 新建会话，处理 initialize，返回 mcp-session-id
  * - POST /mcp（带 session id）→ 复用会话 transport 处理请求
  * - GET  /mcp（带 session id）→ 打开 SSE 流接收服务端推送
@@ -14,8 +19,9 @@ import { createServer } from 'http';
 import { randomUUID } from 'crypto';
 import { registerCreateViewTool } from './tools/create-view.js';
 import { registerGetInputTool } from './tools/get-input.js';
+import { registerListViewsTool } from './tools/list-views.js';
 import { WsServer } from './ws-server.js';
-import { useEditorStore } from './store.js';
+import { WorkspaceRegistry } from './workspace-registry.js';
 
 export interface ServerOptions {
   port?: number;
@@ -27,20 +33,31 @@ interface Session {
   server: McpServer;
 }
 
+/** sessionId 按 MCP 连接生成（WeakMap，连接关闭自动回收） */
+const sessionIds = new WeakMap<McpServer, string>();
+
+/** 获取或创建 MCP 会话 ID */
+function getOrCreateSessionId(server: McpServer): string {
+  let sessionId = sessionIds.get(server);
+  if (!sessionId) {
+    sessionId = randomUUID();
+    sessionIds.set(server, sessionId);
+  }
+  return sessionId;
+}
+
 export async function startServer(options: ServerOptions = {}): Promise<void> {
   const port = options.port ?? 14514;
   const host = options.host ?? 'localhost';
 
   const app = express();
-
-  // 注意：不使用 express.json() 全局中间件
-  // StreamableHTTPServerTransport 需要直接读取原始请求流
-  // express.json() 会消费流，导致 transport 收到空 body
-
   const httpServer = createServer(app);
 
-  // WebSocket 服务器（与 HTTP 共享端口）
-  const wsServer = new WsServer(httpServer);
+  // 工作区注册表（多工作区管理）
+  const registry = new WorkspaceRegistry();
+
+  // WebSocket 服务器（与 HTTP 共享端口，通过 WorkspaceRegistry 路由）
+  const wsServer = new WsServer(httpServer, registry);
 
   // 会话表：sessionId → { transport, server }
   const sessions = new Map<string, Session>();
@@ -48,11 +65,12 @@ export async function startServer(options: ServerOptions = {}): Promise<void> {
   // 创建新会话：独立 transport + McpServer，注册工具
   function createSession(): Session {
     const mcpServer = new McpServer({
-      name: 'mermaid-editor',
+      name: 'mermaid2aichat',
       version: '1.0.0',
     });
-    registerCreateViewTool(mcpServer, wsServer);
-    registerGetInputTool(mcpServer, wsServer);
+    registerCreateViewTool(mcpServer, wsServer, registry, getOrCreateSessionId);
+    registerGetInputTool(mcpServer, wsServer, registry);
+    registerListViewsTool(mcpServer, registry);
 
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
@@ -142,26 +160,12 @@ export async function startServer(options: ServerOptions = {}): Promise<void> {
 
   // 健康检查
   app.get('/health', (req, res) => {
-    res.json({ status: 'ok', service: 'mermaid-editor', sessions: sessions.size });
-  });
-
-  // 重置 Store（测试隔离用）
-  app.post('/reset', (req, res) => {
-    const store = useEditorStore.getState();
-    store.setCanvas({ nodes: [], edges: [], direction: 'TD' });
-    store.setConsumed(false);
-    store.setCanvasSource(null);
-    store.setLastConsumedAt(null);
-    store.setTitle(null);
-    store.setViewport({ x: 0, y: 0, zoom: 1 });
-    wsServer.broadcastCanvasUpdate({ nodes: [], edges: [], direction: 'TD' });
-    wsServer.broadcastConsumedPayload({ consumed: false, lastConsumedAt: null, canvasSource: null });
-    res.json({ success: true });
+    res.json({ status: 'ok', service: 'mermaid2aichat', sessions: sessions.size });
   });
 
   // 启动服务器
   httpServer.listen(port, host, () => {
-    console.log(`[MCP] Mermaid Editor 服务已启动`);
+    console.log(`[MCP] Mermaid2AIChat 服务已启动`);
     console.log(`[MCP] HTTP:  http://${host}:${port}/mcp`);
     console.log(`[MCP] WS:    ws://${host}:${port}/ws`);
     console.log(`[MCP] 健康检查: http://${host}:${port}/health`);
@@ -171,6 +175,7 @@ export async function startServer(options: ServerOptions = {}): Promise<void> {
   process.on('SIGINT', () => {
     console.log('\n[MCP] 正在关闭服务...');
     wsServer.close();
+    registry.disposeAll();
     httpServer.close();
     process.exit(0);
   });

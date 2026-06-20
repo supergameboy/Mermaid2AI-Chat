@@ -3834,6 +3834,8 @@ var WsClient = class {
 
 // src/panel-manager.ts
 var initialState = {
+  views: [],
+  activeViewId: null,
   nodes: [],
   edges: [],
   direction: "TD",
@@ -3845,9 +3847,11 @@ var initialState = {
   connectionStatus: "disconnected"
 };
 var PanelManager = class {
-  constructor(context) {
+  constructor(context, workspaceRoot) {
     this.context = context;
-    this.wsClient = new WsClient();
+    this.workspaceRoot = workspaceRoot;
+    const wsUrl = `ws://localhost:14514/ws?workspaceRoot=${encodeURIComponent(workspaceRoot)}`;
+    this.wsClient = new WsClient(wsUrl);
     this.setupWebSocket();
   }
   panel = null;
@@ -3883,29 +3887,49 @@ var PanelManager = class {
         this.postMessage({ type: "consumed_update", payload });
         break;
       }
-      case "create_view": {
-        const payload = msg.payload;
-        this.state.title = payload.title;
-        this.postMessage({ type: "create_view", payload });
-        this.panel?.reveal(vscode.ViewColumn.Active);
-        break;
-      }
       case "viewport_update": {
         const payload = msg.payload;
         this.state.viewport = payload.viewport;
         this.postMessage({ type: "viewport_update", payload });
         break;
       }
-      case "reconnect_sync": {
+      case "views_update": {
         const payload = msg.payload;
+        this.state.views = payload.views;
+        this.state.activeViewId = payload.activeViewId;
+        this.postMessage({ type: "views_update", payload });
+        break;
+      }
+      case "active_view_update": {
+        const payload = msg.payload;
+        this.state.activeViewId = payload.viewId;
         this.state.nodes = payload.canvas.nodes;
         this.state.edges = payload.canvas.edges;
         this.state.direction = payload.canvas.direction;
         this.state.consumed = payload.consumed.consumed;
         this.state.lastConsumedAt = payload.consumed.lastConsumedAt;
         this.state.canvasSource = payload.consumed.canvasSource;
-        this.state.title = payload.title;
         this.state.viewport = payload.viewport;
+        this.state.title = payload.title;
+        this.postMessage({ type: "active_view_update", payload });
+        this.panel?.reveal(vscode.ViewColumn.Active);
+        break;
+      }
+      case "reconnect_sync": {
+        const payload = msg.payload;
+        this.state.views = payload.views;
+        this.state.activeViewId = payload.activeViewId;
+        if (payload.activeView) {
+          const av = payload.activeView;
+          this.state.nodes = av.canvas.nodes;
+          this.state.edges = av.canvas.edges;
+          this.state.direction = av.canvas.direction;
+          this.state.consumed = av.consumed.consumed;
+          this.state.lastConsumedAt = av.consumed.lastConsumedAt;
+          this.state.canvasSource = av.consumed.canvasSource;
+          this.state.viewport = av.viewport;
+          this.state.title = av.title;
+        }
         this.postMessage({ type: "reconnect_sync", payload });
         break;
       }
@@ -3917,8 +3941,8 @@ var PanelManager = class {
       return;
     }
     this.panel = vscode.window.createWebviewPanel(
-      "mermaidEditor",
-      "Mermaid \u7F16\u8F91\u5668",
+      "mermaid2aichat",
+      "Mermaid2AIChat",
       vscode.ViewColumn.Active,
       {
         enableScripts: true,
@@ -3928,7 +3952,7 @@ var PanelManager = class {
         ]
       }
     );
-    this.panel.title = "Mermaid \u7F16\u8F91\u5668";
+    this.panel.title = "Mermaid2AIChat";
     this.panel.webview.html = this.getWebviewHtml(this.panel.webview);
     const messageDisposable = this.panel.webview.onDidReceiveMessage(
       (msg) => {
@@ -3941,18 +3965,21 @@ var PanelManager = class {
       () => {
         this.panel = null;
         messageDisposable.dispose();
-        vscode.commands.executeCommand("setContext", "mermaid-editor.panelOpen", false);
+        vscode.commands.executeCommand("setContext", "mermaid2aichat.panelOpen", false);
       },
       null,
       this.context.subscriptions
     );
-    vscode.commands.executeCommand("setContext", "mermaid-editor.panelOpen", true);
-    this.sendCurrentState();
+    vscode.commands.executeCommand("setContext", "mermaid2aichat.panelOpen", true);
     if (this.wsClient.getStatus() === "disconnected") {
       this.wsClient.connect();
     }
   }
   handleWebviewMessage(msg) {
+    if (msg.type === "ready") {
+      this.sendCurrentState();
+      return;
+    }
     let wsMsg;
     switch (msg.type) {
       case "canvas_edit":
@@ -3964,6 +3991,21 @@ var PanelManager = class {
       case "viewport_edit":
         wsMsg = { type: "viewport_edit", payload: msg.payload };
         break;
+      case "switch_view":
+        wsMsg = { type: "switch_view", viewId: msg.viewId };
+        break;
+      case "create_view":
+        wsMsg = { type: "create_view", payload: { title: msg.title ?? null } };
+        break;
+      case "close_view":
+        wsMsg = { type: "close_view", viewId: msg.viewId };
+        break;
+      case "rename_view":
+        wsMsg = { type: "rename_view", viewId: msg.viewId, title: msg.title };
+        break;
+      case "reorder_views":
+        wsMsg = { type: "reorder_views", orderedIds: msg.orderedIds };
+        break;
     }
     this.wsClient.send(wsMsg);
   }
@@ -3972,18 +4014,23 @@ var PanelManager = class {
     this.postMessage({
       type: "reconnect_sync",
       payload: {
-        canvas: {
-          nodes: this.state.nodes,
-          edges: this.state.edges,
-          direction: this.state.direction
-        },
-        consumed: {
-          consumed: this.state.consumed,
-          lastConsumedAt: this.state.lastConsumedAt,
-          canvasSource: this.state.canvasSource
-        },
-        title: this.state.title,
-        viewport: this.state.viewport ?? { x: 0, y: 0, zoom: 1 }
+        views: this.state.views,
+        activeViewId: this.state.activeViewId,
+        activeView: this.state.activeViewId ? {
+          viewId: this.state.activeViewId,
+          canvas: {
+            nodes: this.state.nodes,
+            edges: this.state.edges,
+            direction: this.state.direction
+          },
+          consumed: {
+            consumed: this.state.consumed,
+            lastConsumedAt: this.state.lastConsumedAt,
+            canvasSource: this.state.canvasSource
+          },
+          viewport: this.state.viewport ?? { x: 0, y: 0, zoom: 1 },
+          title: this.state.title
+        } : null
       }
     });
     this.postMessage({
@@ -3999,7 +4046,7 @@ var PanelManager = class {
     const webviewDir = path.join(this.context.extensionPath, "dist", "webview");
     const indexHtmlPath = path.join(webviewDir, "index.html");
     if (!fs.existsSync(indexHtmlPath)) {
-      return this.getErrorHtml("Webview \u672A\u6784\u5EFA\u3002\u8BF7\u5148\u8FD0\u884C pnpm --filter @mermaid-editor/vscode-extension build:webview");
+      return this.getErrorHtml("Webview \u672A\u6784\u5EFA\u3002\u8BF7\u5148\u8FD0\u884C pnpm --filter @mermaid2aichat/vscode-extension build:webview");
     }
     let html = fs.readFileSync(indexHtmlPath, "utf-8");
     const nonce = this.getNonce();
@@ -4025,7 +4072,7 @@ var PanelManager = class {
 <html>
 <head><meta charset="UTF-8"><title>\u9519\u8BEF</title></head>
 <body style="padding: 20px; font-family: sans-serif; color: #333;">
-<h2>Mermaid \u7F16\u8F91\u5668</h2>
+<h2>Mermaid2AIChat</h2>
 <p style="color: #d32f2f;">${message}</p>
 </body>
 </html>`;
@@ -4057,7 +4104,7 @@ var READY_POLL_INTERVAL_MS = 500;
 var ServerManager = class {
   constructor(workspaceRoot) {
     this.workspaceRoot = workspaceRoot;
-    this.outputChannel = vscode2.window.createOutputChannel("Mermaid Editor Server");
+    this.outputChannel = vscode2.window.createOutputChannel("Mermaid2AIChat Server");
   }
   childProcess = null;
   outputChannel;
@@ -4082,7 +4129,7 @@ var ServerManager = class {
     await this.waitForReady();
   }
   startProcess() {
-    this.childProcess = cp.spawn("pnpm", ["--filter", "@mermaid-editor/server", "start"], {
+    this.childProcess = cp.spawn("pnpm", ["--filter", "@mermaid2aichat/server", "start"], {
       cwd: this.workspaceRoot,
       shell: true,
       env: { ...process.env, FORCE_COLOR: "0" }
@@ -4148,17 +4195,17 @@ var ServerManager = class {
 var panelManager = null;
 var serverManager = null;
 function activate(context) {
-  console.log("[Mermaid Editor] \u63D2\u4EF6\u5DF2\u6FC0\u6D3B");
+  console.log("[Mermaid2AIChat] \u63D2\u4EF6\u5DF2\u6FC0\u6D3B");
   const workspaceRoot = vscode3.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!workspaceRoot) {
-    vscode3.window.showErrorMessage("Mermaid \u7F16\u8F91\u5668\u9700\u8981\u5728\u5DE5\u4F5C\u533A\u4E2D\u8FD0\u884C");
+    vscode3.window.showErrorMessage("Mermaid2AIChat \u9700\u8981\u5728\u5DE5\u4F5C\u533A\u4E2D\u8FD0\u884C");
     return;
   }
   serverManager = new ServerManager(workspaceRoot);
   context.subscriptions.push(serverManager);
-  panelManager = new PanelManager(context);
+  panelManager = new PanelManager(context, workspaceRoot);
   const openPanelCommand = vscode3.commands.registerCommand(
-    "mermaid-editor.openPanel",
+    "mermaid2aichat.openPanel",
     async () => {
       if (!serverManager || !panelManager) return;
       try {
@@ -4166,7 +4213,7 @@ function activate(context) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         serverManager.showOutput();
-        vscode3.window.showErrorMessage(`Mermaid \u670D\u52A1\u7AEF\u542F\u52A8\u5931\u8D25: ${msg}`);
+        vscode3.window.showErrorMessage(`Mermaid2AIChat \u670D\u52A1\u7AEF\u542F\u52A8\u5931\u8D25: ${msg}`);
         return;
       }
       panelManager.openPanel();
@@ -4177,7 +4224,7 @@ function activate(context) {
 function deactivate() {
   panelManager?.dispose();
   panelManager = null;
-  console.log("[Mermaid Editor] \u63D2\u4EF6\u5DF2\u505C\u7528");
+  console.log("[Mermaid2AIChat] \u63D2\u4EF6\u5DF2\u505C\u7528");
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

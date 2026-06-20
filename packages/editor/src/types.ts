@@ -7,7 +7,7 @@ import type {
   MermaidEdge,
   MermaidNode,
   Viewport,
-} from '@mermaid-editor/serializer';
+} from '@mermaid2aichat/serializer';
 
 /** 连接状态 */
 export type ConnectionStatusType = 'connected' | 'reconnecting' | 'disconnected';

@@ -29,14 +29,14 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'pnpm --filter @mermaid-editor/server start',
+      command: 'pnpm --filter @mermaid2aichat/server start',
       url: 'http://localhost:14514/health',
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
       name: 'server',
     },
     {
-      command: 'pnpm --filter @mermaid-editor/web-editor dev',
+      command: 'pnpm --filter @mermaid2aichat/web-editor dev',
       url: 'http://localhost:5173',
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,

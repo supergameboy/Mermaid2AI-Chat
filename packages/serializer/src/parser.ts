@@ -178,11 +178,11 @@ export function parseMermaid(source: string, errorCollector?: ErrorCollector): P
   }
 
   // 应用 dagre 布局算法生成节点位置（Mermaid AST 不含位置信息）
-  layoutCanvas(nodes, edges, direction);
+  const laidOutNodes = layoutCanvas(nodes, edges, direction);
 
   return {
     success: !errors.hasErrors(),
-    canvas: { nodes, edges, direction },
+    canvas: { nodes: laidOutNodes, edges, direction },
     errors: errors.getErrors(),
   };
 }

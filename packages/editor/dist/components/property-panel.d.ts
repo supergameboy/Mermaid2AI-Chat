@@ -1,5 +1,5 @@
 /** 属性面板 — 选中节点/边时显示属性编辑 */
-import type { MermaidNode, MermaidEdge } from '@mermaid-editor/serializer';
+import type { MermaidNode, MermaidEdge } from '@mermaid2aichat/serializer';
 interface PropertyPanelProps {
     selectedNode: MermaidNode | null;
     selectedEdge: MermaidEdge | null;

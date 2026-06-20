@@ -1,8 +1,8 @@
 {
-  "name": "@mermaid-editor/vscode-extension",
+  "name": "@mermaid2aichat/vscode-extension",
   "version": "1.0.0",
   "private": true,
-  "description": "Mermaid 反向编辑器 VSCode 插件 — 可视化编辑流程图，反向输出 Mermaid 代码",
+  "description": "Mermaid2AIChat VSCode 插件 — 可视化编辑流程图，通过 MCP 与 AI 对话集成",
   "type": "commonjs",
   "main": "./dist/extension.js",
   "engines": {
@@ -12,34 +12,34 @@
   "contributes": {
     "commands": [
       {
-        "command": "mermaid-editor.openPanel",
-        "title": "打开 Mermaid 编辑器",
-        "category": "Mermaid"
+        "command": "mermaid2aichat.openPanel",
+        "title": "打开 Mermaid2AIChat",
+        "category": "Mermaid2AIChat"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "mermaid-editor",
-          "title": "Mermaid 编辑器",
+          "id": "mermaid2aichat",
+          "title": "Mermaid2AIChat",
           "icon": "resources/icon.svg"
         }
       ]
     },
     "views": {
-      "mermaid-editor": [
+      "mermaid2aichat": [
         {
-          "id": "mermaid-editor.welcome",
-          "name": "Mermaid 编辑器",
-          "when": "!mermaid-editor.panelOpen"
+          "id": "mermaid2aichat.welcome",
+          "name": "Mermaid2AIChat",
+          "when": "!mermaid2aichat.panelOpen"
         }
       ]
     },
     "menus": {
       "view/title": [
         {
-          "command": "mermaid-editor.openPanel",
-          "when": "view == mermaid-editor.welcome",
+          "command": "mermaid2aichat.openPanel",
+          "when": "view == mermaid2aichat.welcome",
           "group": "navigation"
         }
       ]
@@ -55,11 +55,11 @@
     "package": "pnpm build && vsce package --no-dependencies"
   },
   "dependencies": {
-    "@mermaid-editor/serializer": "workspace:*",
+    "@mermaid2aichat/serializer": "workspace:*",
     "ws": "^8.16.0"
   },
   "devDependencies": {
-    "@mermaid-editor/editor": "workspace:*",
+    "@mermaid2aichat/editor": "workspace:*",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@types/vscode": "^1.85.0",

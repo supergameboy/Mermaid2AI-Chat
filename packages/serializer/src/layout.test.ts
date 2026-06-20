@@ -31,17 +31,17 @@ describe('layoutCanvas', () => {
     it('should handle empty nodes array', () => {
       const nodes: MermaidNode[] = [];
       const edges: MermaidEdge[] = [];
-      layoutCanvas(nodes, edges, 'TB');
-      expect(nodes.length).toBe(0);
+      const result = layoutCanvas(nodes, edges, 'TB');
+      expect(result.length).toBe(0);
     });
 
     it('should handle single node', () => {
       const nodes = [createNode('A')];
       const edges: MermaidEdge[] = [];
-      layoutCanvas(nodes, edges, 'TB');
-      expect(nodes[0].position).toBeDefined();
-      expect(nodes[0].position.x).toBeTypeOf('number');
-      expect(nodes[0].position.y).toBeTypeOf('number');
+      const result = layoutCanvas(nodes, edges, 'TB');
+      expect(result[0].position).toBeDefined();
+      expect(result[0].position.x).toBeTypeOf('number');
+      expect(result[0].position.y).toBeTypeOf('number');
     });
   });
 
@@ -52,10 +52,10 @@ describe('layoutCanvas', () => {
         createEdge('e1', 'A', 'B'),
         createEdge('e2', 'B', 'C'),
       ];
-      layoutCanvas(nodes, edges, 'TB');
+      const result = layoutCanvas(nodes, edges, 'TB');
 
       // 所有节点都应有有效位置
-      for (const node of nodes) {
+      for (const node of result) {
         expect(node.position.x).toBeTypeOf('number');
         expect(node.position.y).toBeTypeOf('number');
         expect(Number.isFinite(node.position.x)).toBe(true);
@@ -69,12 +69,12 @@ describe('layoutCanvas', () => {
         createEdge('e1', 'A', 'B'),
         createEdge('e2', 'B', 'C'),
       ];
-      layoutCanvas(nodes, edges, 'TB');
+      const result = layoutCanvas(nodes, edges, 'TB');
 
       // A 应在 B 上方，B 应在 C 上方（y 坐标递增）
-      const nodeA = nodes.find((n) => n.id === 'A');
-      const nodeB = nodes.find((n) => n.id === 'B');
-      const nodeC = nodes.find((n) => n.id === 'C');
+      const nodeA = result.find((n) => n.id === 'A');
+      const nodeB = result.find((n) => n.id === 'B');
+      const nodeC = result.find((n) => n.id === 'C');
       expect(nodeA && nodeB && nodeC).toBeTruthy();
       expect(nodeA!.position.y).toBeLessThan(nodeB!.position.y);
       expect(nodeB!.position.y).toBeLessThan(nodeC!.position.y);
@@ -86,12 +86,12 @@ describe('layoutCanvas', () => {
         createEdge('e1', 'A', 'B'),
         createEdge('e2', 'B', 'C'),
       ];
-      layoutCanvas(nodes, edges, 'LR');
+      const result = layoutCanvas(nodes, edges, 'LR');
 
       // A 应在 B 左侧，B 应在 C 左侧（x 坐标递增）
-      const nodeA = nodes.find((n) => n.id === 'A');
-      const nodeB = nodes.find((n) => n.id === 'B');
-      const nodeC = nodes.find((n) => n.id === 'C');
+      const nodeA = result.find((n) => n.id === 'A');
+      const nodeB = result.find((n) => n.id === 'B');
+      const nodeC = result.find((n) => n.id === 'C');
       expect(nodeA && nodeB && nodeC).toBeTruthy();
       expect(nodeA!.position.x).toBeLessThan(nodeB!.position.x);
       expect(nodeB!.position.x).toBeLessThan(nodeC!.position.x);
@@ -128,16 +128,16 @@ describe('layoutCanvas', () => {
         createEdge('e3', 'B', 'D'),
         createEdge('e4', 'C', 'D'),
       ];
-      layoutCanvas(nodes, edges, 'TB');
+      const result = layoutCanvas(nodes, edges, 'TB');
 
       // A 应在最上方，D 应在最下方
-      const nodeA = nodes.find((n) => n.id === 'A');
-      const nodeD = nodes.find((n) => n.id === 'D');
+      const nodeA = result.find((n) => n.id === 'A');
+      const nodeD = result.find((n) => n.id === 'D');
       expect(nodeA!.position.y).toBeLessThan(nodeD!.position.y);
 
       // B 和 C 应在同一层（y 坐标接近）
-      const nodeB = nodes.find((n) => n.id === 'B');
-      const nodeC = nodes.find((n) => n.id === 'C');
+      const nodeB = result.find((n) => n.id === 'B');
+      const nodeC = result.find((n) => n.id === 'C');
       expect(Math.abs(nodeB!.position.y - nodeC!.position.y)).toBeLessThan(5);
     });
 
@@ -148,10 +148,10 @@ describe('layoutCanvas', () => {
         createEdge('e1', 'A', 'B'),
         createEdge('e2', 'C', 'D'),
       ];
-      expect(() => layoutCanvas(nodes, edges, 'TB')).not.toThrow();
+      const result = layoutCanvas(nodes, edges, 'TB');
 
       // 所有节点都应有有效位置
-      for (const node of nodes) {
+      for (const node of result) {
         expect(Number.isFinite(node.position.x)).toBe(true);
         expect(Number.isFinite(node.position.y)).toBe(true);
       }
@@ -181,20 +181,67 @@ describe('layoutCanvas', () => {
         createEdge('e1', 'A', 'B'),
         createEdge('e2', 'B', 'C'),
       ];
-      layoutCanvas(nodes1, edges1, 'TB');
+      const result1 = layoutCanvas(nodes1, edges1, 'TB');
 
       const nodes2 = [createNode('A'), createNode('B'), createNode('C')];
       const edges2 = [
         createEdge('e1', 'A', 'B'),
         createEdge('e2', 'B', 'C'),
       ];
-      layoutCanvas(nodes2, edges2, 'TB');
+      const result2 = layoutCanvas(nodes2, edges2, 'TB');
 
       // 相同输入应产生相同布局
-      for (let i = 0; i < nodes1.length; i++) {
-        expect(nodes1[i].position.x).toBe(nodes2[i].position.x);
-        expect(nodes1[i].position.y).toBe(nodes2[i].position.y);
+      for (let i = 0; i < result1.length; i++) {
+        expect(result1[i].position.x).toBe(result2[i].position.x);
+        expect(result1[i].position.y).toBe(result2[i].position.y);
       }
+    });
+  });
+
+  describe('不可变契约', () => {
+    it('should not mutate input nodes', () => {
+      const nodes = [createNode('A'), createNode('B')];
+      const edges = [createEdge('e1', 'A', 'B')];
+      const originalPositions = nodes.map((n) => n.position);
+
+      const result = layoutCanvas(nodes, edges, 'TB');
+
+      // 原数组节点对象的 position 引用未被修改
+      expect(nodes[0].position).toBe(originalPositions[0]);
+      expect(nodes[1].position).toBe(originalPositions[1]);
+      // 原数组节点对象的 position 值未被修改
+      expect(nodes[0].position).toEqual({ x: 0, y: 0 });
+      expect(nodes[1].position).toEqual({ x: 0, y: 0 });
+      // 返回新数组
+      expect(result).not.toBe(nodes);
+      // 返回新节点对象
+      expect(result[0]).not.toBe(nodes[0]);
+      expect(result[1]).not.toBe(nodes[1]);
+    });
+
+    it('should return new array with computed positions', () => {
+      const nodes = [createNode('A'), createNode('B')];
+      const edges = [createEdge('e1', 'A', 'B')];
+
+      const result = layoutCanvas(nodes, edges, 'TB');
+
+      // 返回的节点应有新位置（非 0,0）
+      expect(result[0].position).not.toEqual({ x: 0, y: 0 });
+      expect(result[1].position).not.toEqual({ x: 0, y: 0 });
+      // 返回的节点应保留原数据
+      expect(result[0].id).toBe('A');
+      expect(result[0].data.label).toBe('A');
+      expect(result[0].type).toBe('rect');
+    });
+
+    it('should return new empty array for empty input', () => {
+      const nodes: MermaidNode[] = [];
+      const edges: MermaidEdge[] = [];
+
+      const result = layoutCanvas(nodes, edges, 'TB');
+
+      expect(result).toEqual([]);
+      expect(result).not.toBe(nodes);
     });
   });
 });

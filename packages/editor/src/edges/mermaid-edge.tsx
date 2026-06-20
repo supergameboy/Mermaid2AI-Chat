@@ -12,15 +12,16 @@ import {
   getSmoothStepPath,
   type EdgeProps,
 } from '@xyflow/react';
-import type { MermaidEdgeStyle } from '@mermaid-editor/serializer';
+import type { MermaidEdgeStyle } from '@mermaid2aichat/serializer';
 import { getEdgeMarkerConfig, toMarkerUrl } from './edge-markers.js';
+import { FloatingEdgeComponent } from './floating-edge.js';
 
 interface MermaidEdgeData {
   edgeStyle: MermaidEdgeStyle;
   label?: string;
 }
 
-const EDGE_STYLE_MAP: Record<MermaidEdgeStyle, {
+export const EDGE_STYLE_MAP: Record<MermaidEdgeStyle, {
   stroke: string;
   strokeWidth: number;
   strokeDasharray?: string;
@@ -104,4 +105,5 @@ MermaidEdgeComponent.displayName = 'MermaidEdge';
 export const edgeTypes = {
   default: MermaidEdgeComponent,
   smoothstep: MermaidEdgeComponent,
+  floating: FloatingEdgeComponent,
 };

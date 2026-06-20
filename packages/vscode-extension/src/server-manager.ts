@@ -3,7 +3,7 @@
  *
  * 职责：
  * - 检查服务端是否已运行（健康检查），复用现有实例
- * - 未运行时启动子进程（pnpm --filter @mermaid-editor/server start）
+ * - 未运行时启动子进程（pnpm --filter @mermaid2aichat/server start）
  * - 等待服务端就绪
  * - 插件卸载时终止子进程（仅限由本插件启动的实例）
  *
@@ -25,7 +25,7 @@ export class ServerManager implements vscode.Disposable {
   private managedByUs = false;
 
   constructor(private readonly workspaceRoot: string) {
-    this.outputChannel = vscode.window.createOutputChannel('Mermaid Editor Server');
+    this.outputChannel = vscode.window.createOutputChannel('Mermaid2AIChat Server');
   }
 
   /**
@@ -54,7 +54,7 @@ export class ServerManager implements vscode.Disposable {
 
   private startProcess(): void {
     // Windows 需要 shell:true 来找到 pnpm.cmd
-    this.childProcess = cp.spawn('pnpm', ['--filter', '@mermaid-editor/server', 'start'], {
+    this.childProcess = cp.spawn('pnpm', ['--filter', '@mermaid2aichat/server', 'start'], {
       cwd: this.workspaceRoot,
       shell: true,
       env: { ...process.env, FORCE_COLOR: '0' },

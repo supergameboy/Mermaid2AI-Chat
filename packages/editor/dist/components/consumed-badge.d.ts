@@ -1,5 +1,5 @@
 /** 消费状态徽章 — 显示画布消费状态和重新启用按钮 */
-import type { CanvasSource } from '@mermaid-editor/serializer';
+import type { CanvasSource } from '@mermaid2aichat/serializer';
 interface ConsumedBadgeProps {
     consumed: boolean;
     canvasSource: CanvasSource;

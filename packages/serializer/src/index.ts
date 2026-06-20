@@ -26,6 +26,11 @@ export type {
   ParseFailureResult,
   ParseError,
   SerializeResult,
+  ViewSource,
+  ViewSummary,
+  ViewContent,
+  View,
+  ActiveViewPayload,
 } from './types.js';
 
 // 解析器导出

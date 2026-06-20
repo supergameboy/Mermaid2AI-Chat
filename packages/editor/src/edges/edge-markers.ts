@@ -13,7 +13,7 @@
  *
  * 纯字符串设计：便于单元测试，边组件负责转换为 SVG marker url。
  */
-import type { MermaidEdgeStyle } from '@mermaid-editor/serializer';
+import type { MermaidEdgeStyle } from '@mermaid2aichat/serializer';
 
 /** 端点 marker 配置（纯字符串，与 React Flow 解耦） */
 export interface EdgeMarkerConfig {

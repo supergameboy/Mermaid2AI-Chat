@@ -1,11 +1,13 @@
 /**
- * WebSocket 客户端 — 连接 Mermaid 编辑器服务端
+ * WebSocket 客户端 — 连接 Mermaid2AIChat 服务端
  *
  * 职责：管理 WebSocket 连接、断线重连、消息转发
  * 消息协议与服务端 ws-server.ts 一致
+ *
+ * 多标签页架构：支持 views_update / active_view_update / 扩展 reconnect_sync
  */
 import WebSocket from 'ws';
-import type { MermaidEdge, MermaidNode, FlowchartDirection, CanvasSource, Viewport } from '@mermaid-editor/serializer';
+import type { MermaidEdge, MermaidNode, FlowchartDirection, CanvasSource, Viewport, ViewSummary } from '@mermaid2aichat/serializer';
 
 // === 消息类型（与服务端一致，联合类型） ===
 
@@ -21,33 +23,46 @@ export interface ConsumedPayload {
   canvasSource: CanvasSource;
 }
 
-export interface CreateViewPayload {
-  title: string | null;
-  mermaid: string;
-}
-
 export interface ViewportPayload {
   viewport: Viewport;
 }
 
-export interface ReconnectSyncPayload {
+export interface ViewsUpdatePayload {
+  views: ViewSummary[];
+  activeViewId: string | null;
+}
+
+export interface ActiveViewPayload {
+  viewId: string;
   canvas: CanvasPayload;
   consumed: ConsumedPayload;
-  title: string | null;
   viewport: Viewport;
+  title: string | null;
+}
+
+export interface ReconnectSyncPayload {
+  views: ViewSummary[];
+  activeViewId: string | null;
+  activeView: ActiveViewPayload | null;
 }
 
 export type WsServerMessage =
   | { type: 'canvas_update'; payload: CanvasPayload; timestamp: number }
   | { type: 'consumed_update'; payload: ConsumedPayload; timestamp: number }
-  | { type: 'create_view'; payload: CreateViewPayload; timestamp: number }
-  | { type: 'reconnect_sync'; payload: ReconnectSyncPayload; timestamp: number }
-  | { type: 'viewport_update'; payload: ViewportPayload; timestamp: number };
+  | { type: 'viewport_update'; payload: ViewportPayload; timestamp: number }
+  | { type: 'views_update'; payload: ViewsUpdatePayload; timestamp: number }
+  | { type: 'active_view_update'; payload: ActiveViewPayload; timestamp: number }
+  | { type: 'reconnect_sync'; payload: ReconnectSyncPayload; timestamp: number };
 
 export type WsClientMessage =
   | { type: 'canvas_edit'; payload: CanvasPayload }
   | { type: 'reset_consumed' }
-  | { type: 'viewport_edit'; payload: ViewportPayload };
+  | { type: 'viewport_edit'; payload: ViewportPayload }
+  | { type: 'switch_view'; viewId: string }
+  | { type: 'create_view'; payload?: { title?: string | null } }
+  | { type: 'close_view'; viewId: string }
+  | { type: 'rename_view'; viewId: string; title: string }
+  | { type: 'reorder_views'; orderedIds: string[] };
 
 export type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
 

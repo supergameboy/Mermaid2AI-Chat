@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { consumedReducer, type ConsumedEvent } from './consumed-state-machine.js';
-import type { ConsumedState } from '@mermaid-editor/serializer';
+import type { ConsumedState } from '@mermaid2aichat/serializer';
 
 describe('consumedReducer', () => {
   const fixedNow = 1700000000000;

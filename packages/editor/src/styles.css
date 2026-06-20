@@ -1,4 +1,4 @@
-/** Mermaid 反向编辑器样式 */
+/** Mermaid2AIChat 样式 */
 * {
   margin: 0;
   padding: 0;
@@ -444,4 +444,213 @@ html, body, #root {
 
 .node-library::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.35);
+}
+
+/* === TabBar 多标签页 === */
+.tab-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px 8px;
+  background: #fafafa;
+  border-bottom: 1px solid #e8e8e8;
+  min-height: 36px;
+  flex-shrink: 0;
+}
+
+.tab-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.tab-group-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: #666;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 3px;
+  background: #f0f0f0;
+  margin-right: 4px;
+}
+
+.tab-group-header:hover {
+  background: #e8e8e8;
+}
+
+.tab-group-toggle {
+  font-size: 10px;
+  width: 12px;
+  display: inline-block;
+  text-align: center;
+}
+
+.tab-group-label {
+  font-weight: 500;
+}
+
+.tab-group-count {
+  color: #999;
+  font-size: 11px;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 13px;
+  color: #595959;
+  background: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 3px;
+  cursor: pointer;
+  user-select: none;
+  max-width: 200px;
+  transition: all 0.15s;
+}
+
+.tab-item:hover {
+  background: #f0f7ff;
+  border-color: #91d5ff;
+}
+
+.tab-item-active {
+  background: #e6f7ff;
+  border-color: #1890ff;
+  color: #1890ff;
+  font-weight: 500;
+  border-bottom: 2px solid #1890ff;
+}
+
+.tab-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+
+.tab-item-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  color: #999;
+  background: transparent;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tab-item-close:hover {
+  color: #ff4d4f;
+  background: #fff1f0;
+}
+
+.tab-edit-input {
+  width: 140px;
+  padding: 2px 4px;
+  font-size: 13px;
+  border: 1px solid #1890ff;
+  border-radius: 2px;
+  outline: none;
+}
+
+.tab-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  font-size: 16px;
+  color: #595959;
+  background: #fff;
+  border: 1px dashed #d9d9d9;
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.tab-new:hover {
+  color: #1890ff;
+  border-color: #1890ff;
+  border-style: solid;
+}
+
+/* === 关闭确认模态对话框（替代 window.confirm） === */
+.tab-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.tab-modal {
+  background: var(--vscode-editor-background, #1e1e1e);
+  border: 1px solid var(--vscode-panel-border, #3c3c3c);
+  border-radius: 6px;
+  padding: 16px 20px;
+  min-width: 320px;
+  max-width: 480px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.tab-modal-message {
+  color: var(--vscode-foreground, #cccccc);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.tab-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.tab-modal-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.tab-modal-cancel {
+  background: transparent;
+  color: var(--vscode-foreground, #cccccc);
+  border-color: var(--vscode-input-border, #3c3c3c);
+}
+
+.tab-modal-cancel:hover {
+  background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.1));
+}
+
+.tab-modal-confirm {
+  background: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #ffffff);
+  border-color: transparent;
+}
+
+.tab-modal-confirm:hover {
+  background: var(--vscode-button-hoverBackground, #1177bb);
 }

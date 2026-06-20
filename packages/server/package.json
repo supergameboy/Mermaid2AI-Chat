@@ -1,5 +1,5 @@
 {
-  "name": "@mermaid-editor/server",
+  "name": "@mermaid2aichat/server",
   "version": "1.0.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mermaid-editor/serializer": "workspace:*",
+    "@mermaid2aichat/serializer": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "express": "^4.21.0",
     "ws": "^8.18.0",

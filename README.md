@@ -12,7 +12,7 @@
 
 ### 场景一：用户画图 → AI 对话（核心场景）
 1. 用户在编辑器画布上绘制流程图
-2. 用户在 AI 对话中说"看看我画的流程图"或调用 `/mermaid-flow-editor`
+2. 用户在 AI 对话中说"看看我画的流程图"或调用 `/mermaid2aichat`
 3. AI 自动调用 `get_input` 工具读取画布状态
 4. AI 基于读取的 mermaid 代码进行分析、回答
 
@@ -24,7 +24,7 @@
 ## 项目结构
 
 ```
-mermaid2ai-chat/
+mermaid2aichat/
 ├── packages/                          # 源代码（monorepo）
 │   ├── editor/                        # 可视化编辑器（React Flow 画布组件库，可复用）
 │   ├── serializer/                    # Mermaid 序列化器（画布状态↔mermaid 双向转换）
@@ -32,7 +32,7 @@ mermaid2ai-chat/
 │   ├── vscode-extension/              # VSCode 插件（自动启动 server）
 │   └── web-editor/                    # Web 编辑器
 ├── skills/                            # SKILL 文件
-│   └── mermaid-flow-editor/
+│   └── mermaid2aichat/
 │       ├── SKILL.md                   # SKILL 主文件
 │       └── references/                # 语法参考与示例
 │           ├── mermaid-syntax.md      # Mermaid 语法参考（14种形状 + 8种边样式）
@@ -81,7 +81,7 @@ pnpm build
 ```json
 {
   "mcpServers": {
-    "mermaid-editor": {
+    "mermaid2aichat": {
       "url": "http://localhost:14514/mcp",
       "transport": "streamable-http"
     }
@@ -91,7 +91,7 @@ pnpm build
 
 ### 4. 安装 SKILL
 
-将 `skills/mermaid-flow-editor` 复制到 TRAE 的 skills 目录。
+将 `skills/mermaid2aichat` 复制到 TRAE 的 skills 目录。
 
 ### 5. 使用
 
@@ -99,10 +99,10 @@ pnpm build
 
 ```bash
 # 启动 MCP 服务端（端口 14514）
-pnpm --filter @mermaid-editor/server start
+pnpm --filter @mermaid2aichat/server start
 
 # 启动 Web 编辑器开发服务器
-pnpm --filter @mermaid-editor/web-editor dev
+pnpm --filter @mermaid2aichat/web-editor dev
 ```
 访问 http://localhost:5173 ，在画布上绘制流程图，然后在 TRAE 对话中输入"看看我画的流程图"，AI 自动读取画布并分析。
 

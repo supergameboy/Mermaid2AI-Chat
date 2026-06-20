@@ -1,5 +1,5 @@
 {
-  "name": "@mermaid-editor/serializer",
+  "name": "@mermaid2aichat/serializer",
   "version": "1.0.0",
   "type": "module",
   "main": "./dist/index.cjs",

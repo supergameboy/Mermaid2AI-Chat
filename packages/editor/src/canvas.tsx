@@ -1,5 +1,5 @@
 /**
- * Canvas — Mermaid 反向编辑器核心画布组件
+ * Canvas — Mermaid2AIChat 核心画布组件
  *
  * 职责：管理 React Flow 画布状态，处理用户交互，通过回调通知外部
  *
@@ -16,6 +16,7 @@ import {
   Controls,
   MiniMap,
   addEdge,
+  useUpdateNodeInternals,
   type Connection,
   type EdgeChange,
   type NodeChange,
@@ -36,9 +37,9 @@ import {
   type MermaidNode,
   type MermaidEdge,
   type FlowchartDirection,
-} from '@mermaid-editor/serializer';
+} from '@mermaid2aichat/serializer';
 import type { CanvasProps, CanvasSnapshot } from './types.js';
-import { nodeTypes } from './nodes/mermaid-nodes.js';
+import { nodeTypes, DirectionContext, ConnectionModeContext, type ConnectionMode } from './nodes/mermaid-nodes.js';
 import { edgeTypes } from './edges/mermaid-edge.js';
 import { Toolbar } from './components/toolbar.js';
 import { NodeLibrary } from './components/node-library.js';
@@ -74,6 +75,8 @@ function CanvasInner(props: CanvasProps) {
   } = props;
 
   const reactFlow = useReactFlow();
+  // 方向变化时通知 React Flow 更新节点 Handle 内部状态（Handle position prop 变化不会自动触发）
+  const updateNodeInternals = useUpdateNodeInternals();
 
   const [nodes, setNodes, onNodesChange] = useNodesState<MermaidNode>(syncNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<MermaidEdge>(syncEdges);
@@ -96,6 +99,35 @@ function CanvasInner(props: CanvasProps) {
   nodesRef.current = nodes;
   edgesRef.current = edges;
   directionRef.current = syncDirection;
+
+  // 本地方向 state：方向切换时立即更新，驱动 DirectionContext → Handle 位置变化
+  // syncDirection 是 props，需要通过 onDirectionChange → 外部 → props 往返才能更新
+  // 使用本地 state 避免往返期间 Handle 位置滞后
+  const [localDirection, setLocalDirection] = useState<FlowchartDirection>(syncDirection);
+
+  // 外部 syncDirection 变化时同步到本地（如其他客户端切换方向、服务端推送）
+  useEffect(() => {
+    setLocalDirection(syncDirection);
+  }, [syncDirection]);
+
+  // 连接模式 state：本地 UI 偏好，不同步到服务端
+  // 'direction' 按方向连接（默认）| 'nearest' 就近连接（floating edges）
+  const [connectionMode, setConnectionMode] = useState<ConnectionMode>('direction');
+
+  // 切换连接模式：更新所有边的类型 + 通知 React Flow Handle 位置变化
+  const handleConnectionModeChange = useCallback(
+    (mode: ConnectionMode) => {
+      setConnectionMode(mode);
+      // 更新所有边的类型：'direction' → 'smoothstep'，'nearest' → 'floating'
+      const edgeType = mode === 'nearest' ? 'floating' : 'smoothstep';
+      setEdges((eds) => eds.map((e) => ({ ...e, type: edgeType })));
+      // 通知 React Flow 节点 Handle 位置已变化
+      setTimeout(() => {
+        nodesRef.current.forEach((node) => updateNodeInternals(node.id));
+      }, 0);
+    },
+    [setEdges, updateNodeInternals]
+  );
 
   // 标记视口同步来源，避免本地 onMove → viewport_edit → viewport_update → setViewport 循环
   const isApplyingRemoteViewport = useRef(false);
@@ -157,13 +189,13 @@ function CanvasInner(props: CanvasProps) {
     [onEdgesChange, onCanvasEdit, getCanvasSnapshot]
   );
 
-  // 连接处理
+  // 连接处理 — 新建边类型根据当前连接模式动态选择，与 defaultEdgeOptions 保持一致
   const onConnect = useCallback(
     (connection: Connection) => {
       const newEdge: MermaidEdge = {
         ...connection,
         id: `edge_${Date.now()}`,
-        type: 'smoothstep',
+        type: connectionMode === 'nearest' ? 'floating' : 'smoothstep',
         data: { edgeStyle: 'arrow' },
       };
       setEdges((eds) => addEdge(newEdge, eds));
@@ -171,7 +203,7 @@ function CanvasInner(props: CanvasProps) {
         onCanvasEdit(getCanvasSnapshot());
       }, 0);
     },
-    [setEdges, onCanvasEdit, getCanvasSnapshot]
+    [setEdges, onCanvasEdit, getCanvasSnapshot, connectionMode]
   );
 
   // 从节点库创建节点
@@ -318,6 +350,8 @@ function CanvasInner(props: CanvasProps) {
     if (result.success) {
       setNodes(result.canvas.nodes);
       setEdges(result.canvas.edges);
+      // 更新本地方向 state → DirectionContext 变化 → Handle 位置更新 + mermaidCode 序列化使用新方向
+      setLocalDirection(result.canvas.direction);
       directionRef.current = result.canvas.direction;
       setCodeError(null);
       setTimeout(() => {
@@ -331,7 +365,7 @@ function CanvasInner(props: CanvasProps) {
       // 解析失败：显示错误，保留原画布状态
       setCodeError(result.errors.map((e) => e.message).join('; '));
     }
-  }, [setNodes, setEdges, onCanvasEdit]);
+  }, [setNodes, setEdges, setLocalDirection, onCanvasEdit]);
 
   // 选中变化 → 更新选中 ID（属性面板从 nodes/edges 派生选中对象）
   const onSelectionChange = useCallback(({ nodes: selNodes, edges: selEdges }: { nodes: Node[]; edges: Edge[] }) => {
@@ -407,23 +441,36 @@ function CanvasInner(props: CanvasProps) {
   const selectedEdge = selectedEdgeId ? edges.find((e) => e.id === selectedEdgeId) ?? null : null;
 
   // 实时序列化画布为 Mermaid 代码（供左侧代码编辑器显示，设计依据：模块3 L145-191）
+  // 使用 localDirection 而非 syncDirection：代码编辑/方向切换时 localDirection 立即更新，
+  // 避免序列化用旧方向覆盖用户输入（"强制代码恢复"问题）
   const mermaidCode = useMemo(() => {
-    const result = serializeMermaid({ nodes, edges, direction: syncDirection });
+    const result = serializeMermaid({ nodes, edges, direction: localDirection });
     return result.mermaid;
-  }, [nodes, edges, syncDirection]);
+  }, [nodes, edges, localDirection]);
 
   return (
     <div className="app-container">
       {/* 顶部工具栏 */}
       <Toolbar
-        direction={syncDirection}
+        direction={localDirection}
         mermaidCode={mermaidCode}
+        connectionMode={connectionMode}
+        onConnectionModeChange={handleConnectionModeChange}
         onDirectionChange={(dir) => {
+          // 立即更新本地方向 state → DirectionContext 变化 → Handle 位置立即更新
+          setLocalDirection(dir);
           directionRef.current = dir;
           // 重新布局：方向变更时用 dagre 重新计算节点位置
-          const newNodes = [...nodesRef.current];
-          layoutCanvas(newNodes, edgesRef.current, dir);
+          // layoutCanvas 返回新节点数组（不可变 API），引用变化触发 React Flow 重渲染
+          const newNodes = layoutCanvas(nodesRef.current, edgesRef.current, dir);
           setNodes(newNodes);
+          // 强制刷新边（创建新边对象），确保 Handle 位置变化后边路径重新计算
+          setEdges((eds) => eds.map((e) => ({ ...e })));
+          // 通知 React Flow 节点 Handle 位置已变化（Handle position prop 变化不会自动更新内部状态）
+          // 使用 setTimeout 确保 Handle DOM 已渲染后再更新内部状态
+          setTimeout(() => {
+            newNodes.forEach((node) => updateNodeInternals(node.id));
+          }, 0);
           onDirectionChange(dir);
           setTimeout(() => {
             onCanvasEdit({
@@ -485,33 +532,37 @@ function CanvasInner(props: CanvasProps) {
               </marker>
             </defs>
           </svg>
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={handleNodesChange}
-            onEdgesChange={handleEdgesChange}
-            onConnect={onConnect}
-            onNodeDoubleClick={onNodeDoubleClick}
-            onEdgeDoubleClick={onEdgeDoubleClick}
-            onSelectionChange={onSelectionChange}
-            onMove={onMove}
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            deleteKeyCode={null}
-            // 禁用 React Flow 默认双击缩放，避免拦截 dblclick 事件，
-            // 使外层 div 的 onDoubleClick 能正常触发（创建节点）
-            zoomOnDoubleClick={false}
-            fitView
-            defaultEdgeOptions={{
-              type: 'smoothstep',
-            }}
-          >
-            <Background />
-            <Controls />
-            <MiniMap />
-          </ReactFlow>
+          <DirectionContext.Provider value={localDirection}>
+            <ConnectionModeContext.Provider value={connectionMode}>
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={handleNodesChange}
+                onEdgesChange={handleEdgesChange}
+                onConnect={onConnect}
+                onNodeDoubleClick={onNodeDoubleClick}
+                onEdgeDoubleClick={onEdgeDoubleClick}
+                onSelectionChange={onSelectionChange}
+                onMove={onMove}
+                onDrop={onDrop}
+                onDragOver={onDragOver}
+                nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                deleteKeyCode={null}
+                // 禁用 React Flow 默认双击缩放，避免拦截 dblclick 事件，
+                // 使外层 div 的 onDoubleClick 能正常触发（创建节点）
+                zoomOnDoubleClick={false}
+                fitView
+                defaultEdgeOptions={{
+                  type: connectionMode === 'nearest' ? 'floating' : 'smoothstep',
+                }}
+              >
+                <Background />
+                <Controls />
+                <MiniMap />
+              </ReactFlow>
+            </ConnectionModeContext.Provider>
+          </DirectionContext.Provider>
 
           {/* 节点内联编辑器 */}
           {editingNode && (

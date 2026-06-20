@@ -1,5 +1,5 @@
 {
-  "name": "@mermaid-editor/web-editor",
+  "name": "@mermaid2aichat/web-editor",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -10,8 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mermaid-editor/editor": "workspace:*",
-    "@mermaid-editor/serializer": "workspace:*",
+    "@mermaid2aichat/editor": "workspace:*",
+    "@mermaid2aichat/serializer": "workspace:*",
     "@xyflow/react": "^12.0.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",

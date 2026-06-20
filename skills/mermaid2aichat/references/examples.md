@@ -108,7 +108,7 @@ AI 行为：
 
 ## 示例7：用户主动调用 SKILL
 
-用户输入 `/mermaid-flow-editor`
+用户输入 `/mermaid2aichat`
 
 AI 行为：
 1. 默认调用 `get_input` 读取画布

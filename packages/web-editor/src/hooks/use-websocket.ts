@@ -1,11 +1,15 @@
 /**
  * WebSocket 客户端 — 连接服务端，同步画布状态
  * 支持断线重连（指数退避）
+ *
+ * 多标签页架构：
+ * - 处理 views_update / active_view_update / reconnect_sync 消息
+ * - 发送 switch_view / create_view / close_view / rename_view / reorder_views 消息
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useEditorStore } from '../store.js';
-import { serializeMermaid } from '@mermaid-editor/serializer';
-import type { MermaidNode, MermaidEdge, FlowchartDirection, Viewport } from '@mermaid-editor/serializer';
+import type { ActiveViewPayload } from '../store.js';
+import type { MermaidNode, MermaidEdge, FlowchartDirection, Viewport, ViewSummary } from '@mermaid2aichat/serializer';
 
 type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
 
@@ -21,28 +25,28 @@ interface ConsumedPayload {
   canvasSource: 'user' | 'ai' | null;
 }
 
-interface CreateViewPayload {
-  title: string | null;
-  mermaid: string;
-}
-
 interface ViewportPayload {
   viewport: Viewport;
 }
 
+interface ViewsUpdatePayload {
+  views: ViewSummary[];
+  activeViewId: string | null;
+}
+
 interface ReconnectSyncPayload {
-  canvas: CanvasPayload;
-  consumed: ConsumedPayload;
-  title: string | null;
-  viewport: Viewport;
+  views: ViewSummary[];
+  activeViewId: string | null;
+  activeView: ActiveViewPayload | null;
 }
 
 type WsServerMessage =
   | { type: 'canvas_update'; payload: CanvasPayload; timestamp: number }
   | { type: 'consumed_update'; payload: ConsumedPayload; timestamp: number }
-  | { type: 'create_view'; payload: CreateViewPayload; timestamp: number }
-  | { type: 'reconnect_sync'; payload: ReconnectSyncPayload; timestamp: number }
-  | { type: 'viewport_update'; payload: ViewportPayload; timestamp: number };
+  | { type: 'viewport_update'; payload: ViewportPayload; timestamp: number }
+  | { type: 'views_update'; payload: ViewsUpdatePayload; timestamp: number }
+  | { type: 'active_view_update'; payload: ActiveViewPayload; timestamp: number }
+  | { type: 'reconnect_sync'; payload: ReconnectSyncPayload; timestamp: number };
 
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
 
@@ -93,15 +97,6 @@ export function useWebSocket(url: string = 'ws://localhost:14514/ws') {
             break;
           }
 
-          case 'create_view': {
-            // AI 调用 create_view → 画布数据已通过 canvas_update 同步
-            // 这里只更新标题
-            const payload = msg.payload;
-            s.setTitleSync(payload.title);
-            console.log('[WS] create_view 通知, title:', payload.title);
-            break;
-          }
-
           case 'viewport_update': {
             // 其他客户端的视口变化 → 同步到本地
             const payload = msg.payload;
@@ -109,16 +104,27 @@ export function useWebSocket(url: string = 'ws://localhost:14514/ws') {
             break;
           }
 
-          case 'reconnect_sync': {
+          case 'views_update': {
+            // 视图列表更新（新建/关闭/重命名/排序）
             const payload = msg.payload;
-            s.setCanvasSync(payload.canvas.nodes, payload.canvas.edges, payload.canvas.direction);
-            s.setConsumedSync(
-              payload.consumed.consumed,
-              payload.consumed.lastConsumedAt,
-              payload.consumed.canvasSource
-            );
-            s.setTitleSync(payload.title);
-            s.setViewportSync(payload.viewport);
+            s.setViewsSync(payload.views, payload.activeViewId);
+            break;
+          }
+
+          case 'active_view_update': {
+            // 活动视图切换 → 同步完整内容
+            const payload = msg.payload;
+            s.setActiveViewContentSync(payload);
+            break;
+          }
+
+          case 'reconnect_sync': {
+            // 重连全量同步：视图列表 + 活动视图内容
+            const payload = msg.payload;
+            s.setViewsSync(payload.views, payload.activeViewId);
+            if (payload.activeView) {
+              s.setActiveViewContentSync(payload.activeView);
+            }
             break;
           }
         }
@@ -158,9 +164,9 @@ export function useWebSocket(url: string = 'ws://localhost:14514/ws') {
     }, delay);
   }, [connect]);
 
+  // === 发送消息方法 ===
+
   // 发送画布编辑到服务端
-  // 可选参数 canvas：本地操作直接传入 React Flow state（避免依赖 store）
-  // 不传则从 store 读取（服务端同步后的状态）
   const sendCanvasEdit = useCallback((canvas?: { nodes: MermaidNode[]; edges: MermaidEdge[]; direction: FlowchartDirection }) => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) return;
     const s = store.getState();
@@ -188,6 +194,54 @@ export function useWebSocket(url: string = 'ws://localhost:14514/ws') {
     }));
   }, []);
 
+  // === 视图操作（客户端→服务端） ===
+
+  // 切换活动视图
+  const sendSwitchView = useCallback((viewId: string) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(JSON.stringify({
+      type: 'switch_view',
+      viewId,
+    }));
+  }, []);
+
+  // 新建空白视图
+  const sendCreateView = useCallback((title?: string | null) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(JSON.stringify({
+      type: 'create_view',
+      payload: { title: title ?? null },
+    }));
+  }, []);
+
+  // 关闭视图
+  const sendCloseView = useCallback((viewId: string) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(JSON.stringify({
+      type: 'close_view',
+      viewId,
+    }));
+  }, []);
+
+  // 重命名视图
+  const sendRenameView = useCallback((viewId: string, title: string) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(JSON.stringify({
+      type: 'rename_view',
+      viewId,
+      title,
+    }));
+  }, []);
+
+  // 重排序视图
+  const sendReorderViews = useCallback((orderedIds: string[]) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(JSON.stringify({
+      type: 'reorder_views',
+      orderedIds,
+    }));
+  }, []);
+
   useEffect(() => {
     connect();
     return () => {
@@ -203,5 +257,11 @@ export function useWebSocket(url: string = 'ws://localhost:14514/ws') {
     sendCanvasEdit,
     sendResetConsumed,
     sendViewportEdit,
+    // 视图操作
+    sendSwitchView,
+    sendCreateView,
+    sendCloseView,
+    sendRenameView,
+    sendReorderViews,
   };
 }

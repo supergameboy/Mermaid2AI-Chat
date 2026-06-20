@@ -3,14 +3,41 @@
  * 使用 SVG 渲染形状，确保文本不变形
  * 每种形状对应一个 React Flow 自定义节点
  */
-import { memo } from 'react';
+import { createContext, useContext, memo } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
-import type { MermaidShapeType, MermaidNodeData } from '@mermaid-editor/serializer';
+import type { FlowchartDirection, MermaidShapeType, MermaidNodeData } from '@mermaid2aichat/serializer';
 
 /** React Flow 节点类型，data 为 MermaidNodeData */
 type MermaidFlowNode = Node<MermaidNodeData, MermaidShapeType>;
 
 const handleStyle = { width: 8, height: 8 };
+
+/** 连接模式：'direction' 按方向连接 | 'nearest' 就近连接 */
+export type ConnectionMode = 'direction' | 'nearest';
+
+/** 画布方向 Context — 由 Canvas 提供，节点组件消费，用于动态设置 Handle 位置 */
+export const DirectionContext = createContext<FlowchartDirection>('TD');
+
+/** 连接模式 Context — 由 Canvas 提供，节点组件消费，用于根据模式渲染 Handle */
+export const ConnectionModeContext = createContext<ConnectionMode>('direction');
+
+/** 根据 direction 计算 source/target Handle 位置（按方向连接模式） */
+function getHandlePositions(direction: FlowchartDirection): {
+  source: Position;
+  target: Position;
+} {
+  switch (direction) {
+    case 'TB':
+    case 'TD':
+      return { source: Position.Bottom, target: Position.Top };
+    case 'BT':
+      return { source: Position.Top, target: Position.Bottom };
+    case 'LR':
+      return { source: Position.Right, target: Position.Left };
+    case 'RL':
+      return { source: Position.Left, target: Position.Right };
+  }
+}
 
 /** 通用节点组件 — 根据形状渲染不同 SVG 形状 */
 export const MermaidNodeComponent = memo(({ data, selected }: NodeProps<MermaidFlowNode>) => {
@@ -20,13 +47,22 @@ export const MermaidNodeComponent = memo(({ data, selected }: NodeProps<MermaidF
   const fill = style?.fill ?? '#fff';
   const color = style?.color ?? '#333';
 
+  // 从 Context 获取 direction 和 connectionMode
+  const direction = useContext(DirectionContext);
+  const connectionMode = useContext(ConnectionModeContext);
+
+  // 按方向连接：Handle 位置由 direction 决定
+  // 就近连接：Handle 位置用 Top/Bottom（floating edge 不依赖 Handle 位置，但用户手动拖拽需要 Handle）
+  const { source: sourcePos, target: targetPos } =
+    connectionMode === 'direction'
+      ? getHandlePositions(direction)
+      : { source: Position.Bottom, target: Position.Top };
+
   return (
     <div className="mermaid-node" style={{ position: 'relative', display: 'inline-block' }}>
-      <Handle type="target" position={Position.Top} style={handleStyle} />
-      <Handle type="target" position={Position.Left} style={handleStyle} />
+      <Handle type="target" position={targetPos} style={handleStyle} />
       <ShapeRenderer shape={shape} label={data.label} stroke={stroke} fill={fill} color={color} selected={selected} />
-      <Handle type="source" position={Position.Bottom} style={handleStyle} />
-      <Handle type="source" position={Position.Right} style={handleStyle} />
+      <Handle type="source" position={sourcePos} style={handleStyle} />
     </div>
   );
 });

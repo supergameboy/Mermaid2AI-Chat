@@ -94,6 +94,48 @@ interface SerializeResult {
     mermaid: string;
     errors: ParseError[];
 }
+/** 视图来源 */
+type ViewSource = 'user' | 'ai';
+/** 视图元数据（轻量，全内存） */
+interface ViewSummary {
+    /** 视图唯一 ID（UUID v4） */
+    id: string;
+    /** 视图标题（用户可编辑，null 表示未命名） */
+    title: string | null;
+    /** 创建时间戳 */
+    createdAt: number;
+    /** 最后更新时间戳 */
+    updatedAt: number;
+    /** AI 会话 ID（source='ai' 时关联 MCP 会话，source='user' 时为 null） */
+    sessionId: string | null;
+    /** 视图来源 */
+    source: ViewSource;
+}
+/** 视图内容（重量，仅活动视图在内存） */
+interface ViewContent {
+    /** 画布状态 */
+    canvas: CanvasState;
+    /** 消费状态 */
+    consumed: ConsumedState;
+    /** 视口 */
+    viewport: Viewport;
+}
+/** 完整视图（元数据 + 内容，用于持久化和全量同步） */
+interface View extends ViewSummary, ViewContent {
+}
+/** 活动视图完整内容（用于 active_view_update 消息） */
+interface ActiveViewPayload {
+    /** 视图 ID */
+    viewId: string;
+    /** 画布状态 */
+    canvas: CanvasState;
+    /** 消费状态 */
+    consumed: ConsumedState;
+    /** 视口 */
+    viewport: Viewport;
+    /** 标题 */
+    title: string | null;
+}
 
 /**
  * 错误收集器 — 解析错误收集、定位、反馈
@@ -214,11 +256,16 @@ declare class IdGenerator {
 declare const idGenerator: IdGenerator;
 
 /**
- * 为画布节点生成布局位置
- * @param nodes 节点列表（position 会被原地修改）
+ * 为画布节点生成布局位置（不可变 API）
+ *
+ * 不修改入参，返回新的节点数组。调用方应使用返回值替换原数组，
+ * 以确保引用变化触发 React 重渲染（避免 React.memo 浅比较跳过更新）。
+ *
+ * @param nodes 节点列表（只读，不会被修改）
  * @param edges 边列表（只读，用于计算布局）
  * @param direction 流程图方向
+ * @returns 新的节点数组，包含 dagre 计算的位置
  */
-declare function layoutCanvas(nodes: MermaidNode[], edges: MermaidEdge[], direction: FlowchartDirection): void;
+declare function layoutCanvas(nodes: readonly MermaidNode[], edges: readonly MermaidEdge[], direction: FlowchartDirection): MermaidNode[];
 
-export { type CanvasSource, type CanvasState, type ConsumedState, type EdgeMarker, ErrorCollector, type FlowchartDirection, IdGenerator, type MermaidEdge, type MermaidEdgeData, type MermaidEdgeStyle, type MermaidNode, type MermaidNodeData, type MermaidShapeType, type NodeStyle, type ParseError, type ParseFailureResult, type ParseResult, type ParseSuccessResult, type SerializeResult, type Viewport, getEdgeSyntax, getShapeSyntax, idGenerator, layoutCanvas, parseMermaid, serializeEdge, serializeMermaid, serializeNode, unescapeLabel };
+export { type ActiveViewPayload, type CanvasSource, type CanvasState, type ConsumedState, type EdgeMarker, ErrorCollector, type FlowchartDirection, IdGenerator, type MermaidEdge, type MermaidEdgeData, type MermaidEdgeStyle, type MermaidNode, type MermaidNodeData, type MermaidShapeType, type NodeStyle, type ParseError, type ParseFailureResult, type ParseResult, type ParseSuccessResult, type SerializeResult, type View, type ViewContent, type ViewSource, type ViewSummary, type Viewport, getEdgeSyntax, getShapeSyntax, idGenerator, layoutCanvas, parseMermaid, serializeEdge, serializeMermaid, serializeNode, unescapeLabel };

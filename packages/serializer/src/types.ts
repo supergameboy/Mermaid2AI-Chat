@@ -153,3 +153,51 @@ export interface SerializeResult {
   mermaid: string;
   errors: ParseError[];
 }
+
+// === 多标签页视图类型 ===
+
+/** 视图来源 */
+export type ViewSource = 'user' | 'ai';
+
+/** 视图元数据（轻量，全内存） */
+export interface ViewSummary {
+  /** 视图唯一 ID（UUID v4） */
+  id: string;
+  /** 视图标题（用户可编辑，null 表示未命名） */
+  title: string | null;
+  /** 创建时间戳 */
+  createdAt: number;
+  /** 最后更新时间戳 */
+  updatedAt: number;
+  /** AI 会话 ID（source='ai' 时关联 MCP 会话，source='user' 时为 null） */
+  sessionId: string | null;
+  /** 视图来源 */
+  source: ViewSource;
+}
+
+/** 视图内容（重量，仅活动视图在内存） */
+export interface ViewContent {
+  /** 画布状态 */
+  canvas: CanvasState;
+  /** 消费状态 */
+  consumed: ConsumedState;
+  /** 视口 */
+  viewport: Viewport;
+}
+
+/** 完整视图（元数据 + 内容，用于持久化和全量同步） */
+export interface View extends ViewSummary, ViewContent {}
+
+/** 活动视图完整内容（用于 active_view_update 消息） */
+export interface ActiveViewPayload {
+  /** 视图 ID */
+  viewId: string;
+  /** 画布状态 */
+  canvas: CanvasState;
+  /** 消费状态 */
+  consumed: ConsumedState;
+  /** 视口 */
+  viewport: Viewport;
+  /** 标题 */
+  title: string | null;
+}

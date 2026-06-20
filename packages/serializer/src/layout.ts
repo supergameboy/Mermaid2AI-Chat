@@ -30,19 +30,24 @@ const DIRECTION_MAP: Record<FlowchartDirection, string> = {
 };
 
 /**
- * 为画布节点生成布局位置
- * @param nodes 节点列表（position 会被原地修改）
+ * 为画布节点生成布局位置（不可变 API）
+ *
+ * 不修改入参，返回新的节点数组。调用方应使用返回值替换原数组，
+ * 以确保引用变化触发 React 重渲染（避免 React.memo 浅比较跳过更新）。
+ *
+ * @param nodes 节点列表（只读，不会被修改）
  * @param edges 边列表（只读，用于计算布局）
  * @param direction 流程图方向
+ * @returns 新的节点数组，包含 dagre 计算的位置
  */
 export function layoutCanvas(
-  nodes: MermaidNode[],
-  edges: MermaidEdge[],
+  nodes: readonly MermaidNode[],
+  edges: readonly MermaidEdge[],
   direction: FlowchartDirection,
-): void {
+): MermaidNode[] {
   // 空画布无需布局
   if (nodes.length === 0) {
-    return;
+    return [];
   }
 
   const graph = new dagre.graphlib.Graph();
@@ -68,16 +73,20 @@ export function layoutCanvas(
   // 执行布局
   dagre.layout(graph);
 
-  // 将 dagre 计算的位置写回节点（dagre 返回中心点，React Flow 需要左上角）
-  for (const node of nodes) {
+  // 返回新节点对象（dagre 返回中心点，React Flow 需要左上角）
+  return nodes.map((node) => {
     const dagreNode = graph.node(node.id);
-    if (dagreNode) {
-      const width = node.width ?? NODE_SIZE.width;
-      const height = node.height ?? NODE_SIZE.height;
-      node.position = {
+    if (!dagreNode) {
+      return node;
+    }
+    const width = node.width ?? NODE_SIZE.width;
+    const height = node.height ?? NODE_SIZE.height;
+    return {
+      ...node,
+      position: {
         x: dagreNode.x - width / 2,
         y: dagreNode.y - height / 2,
-      };
-    }
-  }
+      },
+    };
+  });
 }

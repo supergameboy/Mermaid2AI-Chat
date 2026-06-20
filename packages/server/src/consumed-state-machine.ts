@@ -7,7 +7,7 @@
  * - CANVAS_EDIT: 用户编辑画布 → consumed=false（修复：原设计不重置，导致数据流转断裂）
  * - CREATE_VIEW: AI 调用 create_view 写入 → consumed=true, canvasSource='ai'（修复：原设计 consumed=false，导致AI图被误读）
  */
-import type { ConsumedState, CanvasSource } from '@mermaid-editor/serializer';
+import type { ConsumedState, CanvasSource } from '@mermaid2aichat/serializer';
 
 export type ConsumedEvent =
   | { type: 'CONSUME' }

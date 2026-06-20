@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getEdgeMarkerConfig, isCustomMarker, getCustomMarkerId, toMarkerUrl } from './edge-markers.js';
-import type { MermaidEdgeStyle } from '@mermaid-editor/serializer';
+import type { MermaidEdgeStyle } from '@mermaid2aichat/serializer';
 
 describe('edge-markers', () => {
   describe('getEdgeMarkerConfig', () => {

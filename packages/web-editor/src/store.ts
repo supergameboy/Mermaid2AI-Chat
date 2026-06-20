@@ -1,6 +1,10 @@
 /**
  * 客户端 Store — 通过 WebSocket 与服务端同步
  * 本地状态为镜像，服务端 Store 为真相源
+ *
+ * 多标签页架构：
+ * - views/activeViewId: 视图列表（元数据）+ 活动视图 ID
+ * - nodes/edges/direction/viewport/consumed/title: 活动视图内容（镜像）
  */
 import { create } from 'zustand';
 import type {
@@ -9,26 +13,34 @@ import type {
   MermaidEdge,
   MermaidNode,
   Viewport,
-} from '@mermaid-editor/serializer';
+  ViewSummary,
+} from '@mermaid2aichat/serializer';
+
+/** 活动视图内容同步载荷 */
+export interface ActiveViewPayload {
+  viewId: string;
+  canvas: { nodes: MermaidNode[]; edges: MermaidEdge[]; direction: FlowchartDirection };
+  consumed: { consumed: boolean; lastConsumedAt: number | null; canvasSource: CanvasSource };
+  viewport: Viewport;
+  title: string | null;
+}
 
 interface ClientEditorStore {
-  // 画布状态
+  // === 视图列表（元数据） ===
+  views: ViewSummary[];
+  activeViewId: string | null;
+
+  // === 活动视图内容（镜像服务端） ===
   nodes: MermaidNode[];
   edges: MermaidEdge[];
   direction: FlowchartDirection;
-
-  // 视口（平移/缩放）
   viewport: Viewport | null;
-
-  // 消费状态
   consumed: boolean;
   lastConsumedAt: number | null;
   canvasSource: CanvasSource;
-
-  // 标题
   title: string | null;
 
-  // 本地操作（触发 WebSocket 同步）
+  // === 本地操作（触发 WebSocket 同步） ===
   setNodes: (nodes: MermaidNode[]) => void;
   setEdges: (edges: MermaidEdge[]) => void;
   addNode: (node: MermaidNode) => void;
@@ -39,20 +51,31 @@ interface ClientEditorStore {
   removeEdge: (id: string) => void;
   setDirection: (dir: FlowchartDirection) => void;
 
-  // 服务端同步操作（不触发 WebSocket 回传）
+  // === 服务端同步操作（不触发 WebSocket 回传） ===
   setCanvasSync: (nodes: MermaidNode[], edges: MermaidEdge[], direction: FlowchartDirection) => void;
   setConsumedSync: (consumed: boolean, lastConsumedAt: number | null, canvasSource: CanvasSource) => void;
   setTitleSync: (title: string | null) => void;
   setViewportSync: (viewport: Viewport) => void;
 
-  // 读取
+  // === 视图列表同步（服务端→客户端） ===
+  /** 同步视图列表（views_update 消息） */
+  setViewsSync: (views: ViewSummary[], activeViewId: string | null) => void;
+  /** 同步活动视图完整内容（active_view_update / reconnect_sync 消息） */
+  setActiveViewContentSync: (payload: ActiveViewPayload) => void;
+
+  // === 读取 ===
   getCanvas: () => { nodes: MermaidNode[]; edges: MermaidEdge[]; direction: FlowchartDirection };
 
-  // 重置消费状态（触发 WebSocket）
+  // === 重置消费状态（触发 WebSocket） ===
   resetConsumed: () => void;
 }
 
 export const useEditorStore = create<ClientEditorStore>((set, get) => ({
+  // 视图列表
+  views: [],
+  activeViewId: null,
+
+  // 活动视图内容
   nodes: [],
   edges: [],
   direction: 'TD',
@@ -107,6 +130,23 @@ export const useEditorStore = create<ClientEditorStore>((set, get) => ({
   setTitleSync: (title) => set({ title }),
 
   setViewportSync: (viewport) => set({ viewport }),
+
+  // 视图列表同步
+  setViewsSync: (views, activeViewId) =>
+    set({ views, activeViewId }),
+
+  setActiveViewContentSync: (payload) =>
+    set({
+      activeViewId: payload.viewId,
+      nodes: payload.canvas.nodes,
+      edges: payload.canvas.edges,
+      direction: payload.canvas.direction,
+      consumed: payload.consumed.consumed,
+      lastConsumedAt: payload.consumed.lastConsumedAt,
+      canvasSource: payload.consumed.canvasSource,
+      viewport: payload.viewport,
+      title: payload.title,
+    }),
 
   // 读取
   getCanvas: () => {

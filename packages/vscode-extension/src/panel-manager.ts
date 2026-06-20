@@ -2,32 +2,44 @@
  * Webview 面板管理器 — 创建面板、桥接 WebSocket ↔ Webview
  *
  * 数据流：
- * - 服务端 → WebSocket → onMessage → webview.postMessage → Canvas syncNodes
- * - Canvas onCanvasEdit → webview.postMessage → onDidReceiveMessage → WebSocket send
+ * - 服务端 → WebSocket → onMessage → webview.postMessage → Canvas/TabBar
+ * - Canvas/TabBar → webview.postMessage → onDidReceiveMessage → WebSocket send
+ *
+ * 多标签页架构：
+ * - 转发 views_update / active_view_update / 扩展 reconnect_sync
+ * - 转发 switch_view / create_view / close_view / rename_view / reorder_views
+ * - WebSocket URL 携带 workspaceRoot 参数
  */
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { WsClient, type WsServerMessage, type WsClientMessage, type ConnectionStatus, type CanvasPayload, type ViewportPayload } from './ws-client.js';
-import type { MermaidEdge, MermaidNode, FlowchartDirection, CanvasSource, Viewport } from '@mermaid-editor/serializer';
+import { WsClient, type WsServerMessage, type WsClientMessage, type ConnectionStatus, type CanvasPayload, type ViewportPayload, type ActiveViewPayload, type ViewsUpdatePayload, type ReconnectSyncPayload } from './ws-client.js';
+import type { MermaidEdge, MermaidNode, FlowchartDirection, CanvasSource, Viewport, ViewSummary } from '@mermaid2aichat/serializer';
 
 // === Webview ↔ Extension 消息类型 ===
 
 /** Webview → Extension */
 interface WebviewMessage {
-  type: 'canvas_edit' | 'reset_consumed' | 'viewport_edit';
+  type: 'canvas_edit' | 'reset_consumed' | 'viewport_edit' | 'switch_view' | 'create_view' | 'close_view' | 'rename_view' | 'reorder_views' | 'ready';
   payload?: unknown;
+  viewId?: string;
+  title?: string;
+  orderedIds?: string[];
 }
 
 /** Extension → Webview */
 interface ExtensionMessage {
-  type: 'canvas_update' | 'consumed_update' | 'create_view' | 'reconnect_sync' | 'connection_status' | 'viewport_update';
+  type: 'canvas_update' | 'consumed_update' | 'viewport_update' | 'views_update' | 'active_view_update' | 'reconnect_sync' | 'connection_status';
   payload: unknown;
 }
 
 // === 状态（用于面板重新打开时恢复） ===
 
 interface PanelState {
+  // 视图列表
+  views: ViewSummary[];
+  activeViewId: string | null;
+  // 活动视图内容
   nodes: MermaidNode[];
   edges: MermaidEdge[];
   direction: FlowchartDirection;
@@ -40,6 +52,8 @@ interface PanelState {
 }
 
 const initialState: PanelState = {
+  views: [],
+  activeViewId: null,
   nodes: [],
   edges: [],
   direction: 'TD',
@@ -57,8 +71,13 @@ export class PanelManager {
   private state: PanelState = { ...initialState };
   private disposables: vscode.Disposable[] = [];
 
-  constructor(private readonly context: vscode.ExtensionContext) {
-    this.wsClient = new WsClient();
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly workspaceRoot: string
+  ) {
+    // 构建 WebSocket URL（携带 workspaceRoot 参数）
+    const wsUrl = `ws://localhost:14514/ws?workspaceRoot=${encodeURIComponent(workspaceRoot)}`;
+    this.wsClient = new WsClient(wsUrl);
     this.setupWebSocket();
   }
 
@@ -96,30 +115,50 @@ export class PanelManager {
         this.postMessage({ type: 'consumed_update', payload });
         break;
       }
-      case 'create_view': {
-        const payload = msg.payload;
-        this.state.title = payload.title;
-        this.postMessage({ type: 'create_view', payload });
-        // 自动聚焦面板
-        this.panel?.reveal(vscode.ViewColumn.Active);
-        break;
-      }
       case 'viewport_update': {
         const payload = msg.payload;
         this.state.viewport = payload.viewport;
         this.postMessage({ type: 'viewport_update', payload });
         break;
       }
-      case 'reconnect_sync': {
-        const payload = msg.payload;
+      case 'views_update': {
+        const payload: ViewsUpdatePayload = msg.payload;
+        this.state.views = payload.views;
+        this.state.activeViewId = payload.activeViewId;
+        this.postMessage({ type: 'views_update', payload });
+        break;
+      }
+      case 'active_view_update': {
+        const payload: ActiveViewPayload = msg.payload;
+        this.state.activeViewId = payload.viewId;
         this.state.nodes = payload.canvas.nodes;
         this.state.edges = payload.canvas.edges;
         this.state.direction = payload.canvas.direction;
         this.state.consumed = payload.consumed.consumed;
         this.state.lastConsumedAt = payload.consumed.lastConsumedAt;
         this.state.canvasSource = payload.consumed.canvasSource;
-        this.state.title = payload.title;
         this.state.viewport = payload.viewport;
+        this.state.title = payload.title;
+        this.postMessage({ type: 'active_view_update', payload });
+        // 自动聚焦面板（AI 创建新视图时）
+        this.panel?.reveal(vscode.ViewColumn.Active);
+        break;
+      }
+      case 'reconnect_sync': {
+        const payload: ReconnectSyncPayload = msg.payload;
+        this.state.views = payload.views;
+        this.state.activeViewId = payload.activeViewId;
+        if (payload.activeView) {
+          const av = payload.activeView;
+          this.state.nodes = av.canvas.nodes;
+          this.state.edges = av.canvas.edges;
+          this.state.direction = av.canvas.direction;
+          this.state.consumed = av.consumed.consumed;
+          this.state.lastConsumedAt = av.consumed.lastConsumedAt;
+          this.state.canvasSource = av.consumed.canvasSource;
+          this.state.viewport = av.viewport;
+          this.state.title = av.title;
+        }
         this.postMessage({ type: 'reconnect_sync', payload });
         break;
       }
@@ -134,8 +173,8 @@ export class PanelManager {
 
     // 创建面板
     this.panel = vscode.window.createWebviewPanel(
-      'mermaidEditor',
-      'Mermaid 编辑器',
+      'mermaid2aichat',
+      'Mermaid2AIChat',
       vscode.ViewColumn.Active,
       {
         enableScripts: true,
@@ -146,7 +185,7 @@ export class PanelManager {
       }
     );
 
-    this.panel.title = 'Mermaid 编辑器';
+    this.panel.title = 'Mermaid2AIChat';
     this.panel.webview.html = this.getWebviewHtml(this.panel.webview);
 
     // 接收 Webview 消息 → 转发给 WebSocket
@@ -163,24 +202,30 @@ export class PanelManager {
       () => {
         this.panel = null;
         messageDisposable.dispose();
-        vscode.commands.executeCommand('setContext', 'mermaid-editor.panelOpen', false);
+        vscode.commands.executeCommand('setContext', 'mermaid2aichat.panelOpen', false);
       },
       null,
       this.context.subscriptions
     );
 
-    vscode.commands.executeCommand('setContext', 'mermaid-editor.panelOpen', true);
-
-    // 发送当前状态给 Webview（面板刚打开时）
-    this.sendCurrentState();
+    vscode.commands.executeCommand('setContext', 'mermaid2aichat.panelOpen', true);
 
     // 连接 WebSocket
+    // 注意：sendCurrentState 改为在收到 webview 的 'ready' 消息后调用
+    // 避免在 webview 挂载前发送消息导致丢失
     if (this.wsClient.getStatus() === 'disconnected') {
       this.wsClient.connect();
     }
   }
 
   private handleWebviewMessage(msg: WebviewMessage): void {
+    // webview 挂载完成通知 → 发送初始状态
+    // 解决竞态条件：openPanel 时 webview 还没挂载，消息会丢失
+    if (msg.type === 'ready') {
+      this.sendCurrentState();
+      return;
+    }
+
     let wsMsg: WsClientMessage;
     switch (msg.type) {
       case 'canvas_edit':
@@ -192,27 +237,48 @@ export class PanelManager {
       case 'viewport_edit':
         wsMsg = { type: 'viewport_edit', payload: msg.payload as ViewportPayload };
         break;
+      case 'switch_view':
+        wsMsg = { type: 'switch_view', viewId: msg.viewId! };
+        break;
+      case 'create_view':
+        wsMsg = { type: 'create_view', payload: { title: msg.title ?? null } };
+        break;
+      case 'close_view':
+        wsMsg = { type: 'close_view', viewId: msg.viewId! };
+        break;
+      case 'rename_view':
+        wsMsg = { type: 'rename_view', viewId: msg.viewId!, title: msg.title! };
+        break;
+      case 'reorder_views':
+        wsMsg = { type: 'reorder_views', orderedIds: msg.orderedIds! };
+        break;
     }
     this.wsClient.send(wsMsg);
   }
 
   /** 发送当前完整状态给 Webview（面板打开时） */
   private sendCurrentState(): void {
+    // 发送视图列表
     this.postMessage({
       type: 'reconnect_sync',
       payload: {
-        canvas: {
-          nodes: this.state.nodes,
-          edges: this.state.edges,
-          direction: this.state.direction,
-        },
-        consumed: {
-          consumed: this.state.consumed,
-          lastConsumedAt: this.state.lastConsumedAt,
-          canvasSource: this.state.canvasSource,
-        },
-        title: this.state.title,
-        viewport: this.state.viewport ?? { x: 0, y: 0, zoom: 1 },
+        views: this.state.views,
+        activeViewId: this.state.activeViewId,
+        activeView: this.state.activeViewId ? {
+          viewId: this.state.activeViewId,
+          canvas: {
+            nodes: this.state.nodes,
+            edges: this.state.edges,
+            direction: this.state.direction,
+          },
+          consumed: {
+            consumed: this.state.consumed,
+            lastConsumedAt: this.state.lastConsumedAt,
+            canvasSource: this.state.canvasSource,
+          },
+          viewport: this.state.viewport ?? { x: 0, y: 0, zoom: 1 },
+          title: this.state.title,
+        } : null,
       },
     });
     this.postMessage({
@@ -231,7 +297,7 @@ export class PanelManager {
     const indexHtmlPath = path.join(webviewDir, 'index.html');
 
     if (!fs.existsSync(indexHtmlPath)) {
-      return this.getErrorHtml('Webview 未构建。请先运行 pnpm --filter @mermaid-editor/vscode-extension build:webview');
+      return this.getErrorHtml('Webview 未构建。请先运行 pnpm --filter @mermaid2aichat/vscode-extension build:webview');
     }
 
     let html = fs.readFileSync(indexHtmlPath, 'utf-8');
@@ -271,7 +337,7 @@ export class PanelManager {
 <html>
 <head><meta charset="UTF-8"><title>错误</title></head>
 <body style="padding: 20px; font-family: sans-serif; color: #333;">
-<h2>Mermaid 编辑器</h2>
+<h2>Mermaid2AIChat</h2>
 <p style="color: #d32f2f;">${message}</p>
 </body>
 </html>`;

@@ -1,6 +1,6 @@
 /** 节点库 — 14种形状，支持点击添加和拖拽到画布 */
 import type { DragEvent } from 'react';
-import type { MermaidShapeType } from '@mermaid-editor/serializer';
+import type { MermaidShapeType } from '@mermaid2aichat/serializer';
 
 interface NodeLibraryProps {
   onAddNode: (shape: MermaidShapeType) => void;

@@ -1,4 +1,5 @@
 node_modules/
+dist/
 ScreenShot/
 .vscode/
 .trae/
@@ -10,4 +11,5 @@ docs/
 Mermaid Reverse Editor Skill.md
 todo.md
 报名帖-创意产物.html
-**/dist
+mermaid-develop
+mermaid-live-editor-develop

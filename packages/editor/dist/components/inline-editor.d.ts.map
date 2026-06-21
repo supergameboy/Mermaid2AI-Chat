@@ -1,1 +1,0 @@
-{"version":3,"file":"inline-editor.d.ts","sourceRoot":"","sources":["../../src/components/inline-editor.tsx"],"names":[],"mappings":"AAGA,UAAU,iBAAiB;IACzB,KAAK,EAAE,MAAM,CAAC;IACd,SAAS,EAAE,CAAC,KAAK,EAAE,MAAM,KAAK,IAAI,CAAC;IACnC,QAAQ,EAAE,MAAM,IAAI,CAAC;CACtB;AAED,wBAAgB,YAAY,CAAC,EAAE,KAAK,EAAE,SAAS,EAAE,QAAQ,EAAE,EAAE,iBAAiB,+BA0C7E"}

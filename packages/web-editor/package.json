@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.2.0",
     "@mermaid2aichat/editor": "workspace:*",
     "@mermaid2aichat/serializer": "workspace:*",
     "@xyflow/react": "^12.0.0",

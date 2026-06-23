@@ -3,7 +3,7 @@
  *
  * 动态计算 source/target 节点之间最近的连接点，不绑定到固定 Handle。
  * 使用 useInternalNode 获取节点位置和尺寸，根据节点中心点相对位置选择最近方向。
- * 复用 MermaidEdgeComponent 的样式逻辑（EDGE_STYLE_MAP、marker）。
+ * 复用 flowchart/edge-markers 的样式逻辑（getEdgeStyleConfig、toMarkerUrl）。
  */
 import { memo } from 'react';
 import {
@@ -15,14 +15,8 @@ import {
   type EdgeProps,
   type InternalNode,
 } from '@xyflow/react';
-import type { MermaidEdgeStyle } from '@mermaid2aichat/serializer';
-import { EDGE_STYLE_MAP } from './mermaid-edge.js';
-import { getEdgeMarkerConfig, toMarkerUrl } from './edge-markers.js';
-
-interface MermaidEdgeData {
-  edgeStyle: MermaidEdgeStyle;
-  label?: string;
-}
+import type { MermaidEdgeData, MermaidEdgeStyle } from '@mermaid2aichat/serializer';
+import { getEdgeStyleConfig, toMarkerUrl } from './flowchart/edge-markers.js';
 
 /** 计算节点的中心点（绝对坐标） */
 function getNodeCenter(node: InternalNode): { x: number; y: number } {
@@ -131,13 +125,23 @@ export const FloatingEdgeComponent = memo(({
   if (!sourceNode || !targetNode) return null;
 
   const edgeData = data as MermaidEdgeData | undefined;
-  const edgeStyle = edgeData?.edgeStyle ?? 'arrow';
-  const style = EDGE_STYLE_MAP[edgeStyle];
+  const edgeStyle: MermaidEdgeStyle = edgeData?.edgeStyle ?? 'arrow';
+  const config = getEdgeStyleConfig(edgeStyle);
 
-  // 根据 edgeStyle 主动计算 marker
-  const markerConfig = getEdgeMarkerConfig(edgeStyle);
-  const resolvedMarkerEnd = toMarkerUrl(markerConfig.markerEndType);
-  const resolvedMarkerStart = toMarkerUrl(markerConfig.markerStartType);
+  // 不可见线 — 仅布局占位，不渲染视觉元素
+  if (config.stroke === 'invisible') {
+    return null;
+  }
+
+  // 线型样式
+  const strokeColor = selected ? '#1890ff' : '#333333';
+  const stroke = config.strokeDasharray
+    ? { stroke: strokeColor, strokeWidth: config.strokeWidth, strokeDasharray: config.strokeDasharray }
+    : { stroke: strokeColor, strokeWidth: config.strokeWidth };
+
+  // 端点 marker
+  const markerEnd = toMarkerUrl(config.markerEnd);
+  const markerStart = toMarkerUrl(config.markerStart);
 
   const { sx, sy, sourcePos, tx, ty, targetPos } = getEdgeParams(sourceNode, targetNode);
 
@@ -155,12 +159,9 @@ export const FloatingEdgeComponent = memo(({
       <BaseEdge
         id={id}
         path={edgePath}
-        style={{
-          ...style,
-          ...(selected ? { stroke: '#1890ff', strokeWidth: (style.strokeWidth ?? 2) + 1 } : {}),
-        }}
-        markerEnd={resolvedMarkerEnd}
-        markerStart={resolvedMarkerStart}
+        style={stroke}
+        markerEnd={markerEnd}
+        markerStart={markerStart}
       />
       {edgeData?.label && (
         <EdgeLabelRenderer>
@@ -172,7 +173,7 @@ export const FloatingEdgeComponent = memo(({
               padding: '2px 8px',
               borderRadius: '4px',
               fontSize: '12px',
-              border: '1px solid #d9d9d9',
+              border: `1px solid ${selected ? '#1890ff' : '#d9d9d9'}`,
               pointerEvents: 'all',
             }}
             className="edge-label"

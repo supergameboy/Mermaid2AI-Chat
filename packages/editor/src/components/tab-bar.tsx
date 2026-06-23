@@ -12,7 +12,7 @@
  * - 用户操作 → on* 回调 → App 发送 WebSocket 消息
  * - 服务端广播 → Store 更新 views/activeViewId → TabBar 重新渲染
  */
-import { useState, useCallback, useRef, useEffect, type DragEvent } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo, type DragEvent } from 'react';
 import type { ViewSummary } from '@mermaid2aichat/serializer';
 
 export interface TabBarProps {
@@ -147,8 +147,11 @@ export function TabBar(props: TabBarProps) {
   // 关闭确认模态对话框（替代 window.confirm，VSCode webview 禁止原生对话框）
   const [closeConfirmView, setCloseConfirmView] = useState<ViewSummary | null>(null);
   const dragSourceId = useRef<string | null>(null);
+  // 重命名 input 引用：useEffect 接管焦点管理，比重渲染时的 autoFocus 更可靠
+  const editInputRef = useRef<HTMLInputElement>(null);
 
-  const groups = groupViewsBySession(views);
+  // memoize groups：groupViewsBySession 每次调用都返回新数组/对象，避免 useEffect 依赖变化导致无限循环
+  const groups = useMemo(() => groupViewsBySession(views), [views]);
 
   // 初始化折叠状态：历史会话默认折叠（仅最新会话和手动组展开）
   useEffect(() => {
@@ -164,6 +167,15 @@ export function TabBar(props: TabBarProps) {
       return collapsed;
     });
   }, [groups]);
+
+  // 进入编辑态时聚焦 input 并全选文本
+  // 使用 useRef + useEffect 管理焦点，避免重渲染时 autoFocus 失效
+  useEffect(() => {
+    if (editingViewId && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingViewId]);
 
   const toggleGroup = useCallback((key: string) => {
     setCollapsedGroups((prev) => {
@@ -275,18 +287,24 @@ export function TabBar(props: TabBarProps) {
                   onDragStart={(e) => handleDragStart(e, view.id)}
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, view.id, group.views)}
-                  onClick={() => !isEditing && onSwitchView(view.id)}
+                  onClick={() => !isEditing && view.id !== activeViewId && onSwitchView(view.id)}
                   onDoubleClick={() => handleStartRename(view)}
                   title={tooltip}
                 >
                   {isEditing ? (
                     <input
+                      ref={editInputRef}
                       className="tab-edit-input"
                       type="text"
                       value={editingTitle}
-                      autoFocus
                       onChange={(e) => setEditingTitle(e.target.value)}
-                      onBlur={handleCommitRename}
+                      onBlur={(e) => {
+                        // 仅当焦点真正离开 input（转移到其他元素）时才提交
+                        // 避免 React reconciliation 过程中的意外失焦触发提交
+                        if (e.relatedTarget !== null) {
+                          handleCommitRename();
+                        }
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') handleCommitRename();
                         if (e.key === 'Escape') handleCancelRename();

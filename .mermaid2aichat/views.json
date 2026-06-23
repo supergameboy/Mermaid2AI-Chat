@@ -1,0 +1,2201 @@
+{
+  "version": 1,
+  "views": [
+    {
+      "id": "935a2818-4a41-43fd-b1c8-ef428dd4532d",
+      "title": null,
+      "createdAt": 1782222029615,
+      "updatedAt": 1782236253025,
+      "sessionId": null,
+      "source": "user",
+      "diagramType": "flowchart",
+      "canvas": {
+        "diagramType": "flowchart",
+        "nodes": [
+          {
+            "id": "FinalValidate",
+            "type": "subgraph",
+            "position": {
+              "x": 127,
+              "y": 5648
+            },
+            "data": {
+              "label": "最终批量验证（使用子Agent）",
+              "shape": "rect",
+              "isSubgraph": true,
+              "labelType": "string",
+              "subgraphNodes": [
+                "U",
+                "V",
+                "W",
+                "X"
+              ]
+            },
+            "width": 366,
+            "height": 548,
+            "measured": {
+              "width": 152,
+              "height": 48
+            }
+          },
+          {
+            "id": "DocGen",
+            "type": "subgraph",
+            "position": {
+              "x": 149,
+              "y": 4734
+            },
+            "data": {
+              "label": "标准设计文档集生成",
+              "shape": "rect",
+              "isSubgraph": true,
+              "labelType": "string",
+              "subgraphNodes": [
+                "T1",
+                "T2",
+                "T3",
+                "T4",
+                "T5",
+                "T6"
+              ]
+            },
+            "width": 200,
+            "height": 1096,
+            "measured": {
+              "width": 108,
+              "height": 48
+            },
+            "selected": false,
+            "dragging": false
+          },
+          {
+            "id": "Validate",
+            "type": "subgraph",
+            "position": {
+              "x": 474.5,
+              "y": 3820
+            },
+            "data": {
+              "label": "验证流程（使用子Agent）",
+              "shape": "rect",
+              "isSubgraph": true,
+              "labelType": "string",
+              "subgraphNodes": [
+                "N",
+                "O",
+                "P",
+                "Q",
+                "R",
+                "S"
+              ]
+            },
+            "width": 427,
+            "height": 1124,
+            "measured": {
+              "width": 112,
+              "height": 48
+            },
+            "selected": false,
+            "dragging": false
+          },
+          {
+            "id": "L2_L3",
+            "type": "subgraph",
+            "position": {
+              "x": 497,
+              "y": 2808
+            },
+            "data": {
+              "label": "L2-L4 递归细化（中观/微观/原子级）",
+              "shape": "rect",
+              "isSubgraph": true,
+              "labelType": "string",
+              "subgraphNodes": [
+                "J",
+                "K",
+                "LL",
+                "LM"
+              ]
+            },
+            "width": 216,
+            "height": 716,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "L1",
+            "type": "subgraph",
+            "position": {
+              "x": 1090,
+              "y": 2754
+            },
+            "data": {
+              "label": "L1 功能模块级（宏观级-顺序执行）",
+              "shape": "rect",
+              "isSubgraph": true,
+              "labelType": "string",
+              "subgraphNodes": [
+                "I3",
+                "IN",
+                "ModuleA",
+                "ModuleB"
+              ]
+            },
+            "width": 3056,
+            "height": 2344,
+            "measured": {
+              "width": 108,
+              "height": 48
+            },
+            "selected": false,
+            "dragging": false
+          },
+          {
+            "id": "ModuleB",
+            "type": "subgraph",
+            "position": {
+              "x": -1378,
+              "y": 77
+            },
+            "data": {
+              "label": "模块B完整流程",
+              "shape": "rect",
+              "isSubgraph": true,
+              "labelType": "string",
+              "subgraphNodes": [
+                "MB1",
+                "I2",
+                "MB2",
+                "MB3",
+                "MB4",
+                "MB5",
+                "MB6",
+                "MB7",
+                "MB8",
+                "MB9"
+              ],
+              "_sourceLine": 32
+            },
+            "parentId": "L1",
+            "width": 264,
+            "height": 1996,
+            "measured": {
+              "width": 264,
+              "height": 1996
+            },
+            "selected": false,
+            "dragging": false
+          },
+          {
+            "id": "ModuleA",
+            "type": "subgraph",
+            "position": {
+              "x": -1086,
+              "y": -159
+            },
+            "data": {
+              "label": "模块A完整流程",
+              "shape": "rect",
+              "isSubgraph": true,
+              "labelType": "string",
+              "subgraphNodes": [
+                "MA1",
+                "I1",
+                "MA2",
+                "MA3",
+                "MA4",
+                "MA5",
+                "MA6",
+                "MA7",
+                "MA8",
+                "MA9"
+              ],
+              "_sourceLine": 20
+            },
+            "parentId": "L1",
+            "width": 264,
+            "height": 1980,
+            "measured": {
+              "width": 264,
+              "height": 1980
+            },
+            "selected": false,
+            "dragging": false
+          },
+          {
+            "id": "L0",
+            "type": "subgraph",
+            "position": {
+              "x": 1297,
+              "y": 964
+            },
+            "data": {
+              "label": "L0 初步想法（概念级）",
+              "shape": "rect",
+              "isSubgraph": true,
+              "labelType": "string",
+              "subgraphNodes": [
+                "C",
+                "D",
+                "E",
+                "F",
+                "G",
+                "H"
+              ]
+            },
+            "width": 288,
+            "height": 1052,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "Start",
+            "type": "subgraph",
+            "position": {
+              "x": 1297,
+              "y": 164
+            },
+            "data": {
+              "label": "开始",
+              "shape": "rect",
+              "isSubgraph": true,
+              "labelType": "string",
+              "subgraphNodes": [
+                "B",
+                "A"
+              ]
+            },
+            "width": 200,
+            "height": 364,
+            "measured": {
+              "width": 108,
+              "height": 48
+            },
+            "selected": false
+          },
+          {
+            "id": "A",
+            "type": "default",
+            "position": {
+              "x": 0,
+              "y": -56
+            },
+            "data": {
+              "label": "获取当前时间",
+              "shape": "rect",
+              "_sourceLine": 2
+            },
+            "parentId": "Start",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "B",
+            "type": "default",
+            "position": {
+              "x": -2,
+              "y": 112
+            },
+            "data": {
+              "label": "收集用户初步想法",
+              "shape": "rect"
+            },
+            "parentId": "Start",
+            "width": 112,
+            "height": 48,
+            "measured": {
+              "width": 112,
+              "height": 48
+            },
+            "selected": false
+          },
+          {
+            "id": "C",
+            "type": "default",
+            "position": {
+              "x": 0,
+              "y": -400
+            },
+            "data": {
+              "label": "识别设计决策点",
+              "shape": "rect"
+            },
+            "parentId": "L0",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "D",
+            "type": "default",
+            "position": {
+              "x": -10,
+              "y": -232
+            },
+            "data": {
+              "label": "提供三套设计方案",
+              "shape": "diamond"
+            },
+            "parentId": "L0",
+            "width": 128,
+            "height": 64,
+            "measured": {
+              "width": 128,
+              "height": 64
+            }
+          },
+          {
+            "id": "E",
+            "type": "default",
+            "position": {
+              "x": -50,
+              "y": -48
+            },
+            "data": {
+              "label": "AskUserQuestion 用户选择",
+              "shape": "rect"
+            },
+            "parentId": "L0",
+            "width": 208,
+            "height": 48,
+            "measured": {
+              "width": 208,
+              "height": 48
+            }
+          },
+          {
+            "id": "F",
+            "type": "default",
+            "position": {
+              "x": -18,
+              "y": 120
+            },
+            "data": {
+              "label": "记录决策到需求规格说明书",
+              "shape": "rect"
+            },
+            "parentId": "L0",
+            "width": 144,
+            "height": 48,
+            "measured": {
+              "width": 144,
+              "height": 48
+            }
+          },
+          {
+            "id": "G",
+            "type": "default",
+            "position": {
+              "x": -2,
+              "y": 288
+            },
+            "data": {
+              "label": "推荐L1模块划分",
+              "shape": "rect"
+            },
+            "parentId": "L0",
+            "width": 112,
+            "height": 48,
+            "measured": {
+              "width": 112,
+              "height": 48
+            }
+          },
+          {
+            "id": "H",
+            "type": "default",
+            "position": {
+              "x": 0,
+              "y": 456
+            },
+            "data": {
+              "label": "询问用户确认",
+              "shape": "rect"
+            },
+            "parentId": "L0",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "I1",
+            "type": "default",
+            "position": {
+              "x": 1293,
+              "y": -799
+            },
+            "data": {
+              "label": "模块A设计",
+              "shape": "rect"
+            },
+            "parentId": "ModuleA",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "I2",
+            "type": "default",
+            "position": {
+              "x": 1310,
+              "y": -807
+            },
+            "data": {
+              "label": "模块B设计",
+              "shape": "rect"
+            },
+            "parentId": "ModuleB",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "I3",
+            "type": "default",
+            "position": {
+              "x": -284,
+              "y": -590
+            },
+            "data": {
+              "label": "模块C设计",
+              "shape": "rect"
+            },
+            "parentId": "L1",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "IN",
+            "type": "default",
+            "position": {
+              "x": -284,
+              "y": -414
+            },
+            "data": {
+              "label": "模块N设计",
+              "shape": "rect"
+            },
+            "parentId": "L1",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "MA1",
+            "type": "default",
+            "position": {
+              "x": 1312,
+              "y": -571
+            },
+            "data": {
+              "label": "创建模块文档",
+              "shape": "rect"
+            },
+            "parentId": "ModuleA",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "MA2",
+            "type": "default",
+            "position": {
+              "x": 1312,
+              "y": -403
+            },
+            "data": {
+              "label": "L1设计分析",
+              "shape": "rect"
+            },
+            "parentId": "ModuleA",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "MA3",
+            "type": "default",
+            "position": {
+              "x": 1304,
+              "y": -235
+            },
+            "data": {
+              "label": "三套设计方案",
+              "shape": "diamond"
+            },
+            "parentId": "ModuleA",
+            "width": 124,
+            "height": 64,
+            "measured": {
+              "width": 124,
+              "height": 64
+            }
+          },
+          {
+            "id": "MA4",
+            "type": "default",
+            "position": {
+              "x": 1274,
+              "y": 17
+            },
+            "data": {
+              "label": "AskUserQuestion选择",
+              "shape": "rect"
+            },
+            "parentId": "ModuleA",
+            "width": 184,
+            "height": 48,
+            "measured": {
+              "width": 184,
+              "height": 48
+            }
+          },
+          {
+            "id": "MA5",
+            "type": "default",
+            "position": {
+              "x": 1312,
+              "y": 193
+            },
+            "data": {
+              "label": "记录决策",
+              "shape": "rect"
+            },
+            "parentId": "ModuleA",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "MA6",
+            "type": "default",
+            "position": {
+              "x": 1312,
+              "y": 361
+            },
+            "data": {
+              "label": "用户交互设计",
+              "shape": "rect"
+            },
+            "parentId": "ModuleA",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "MA7",
+            "type": "default",
+            "position": {
+              "x": 1312,
+              "y": 529
+            },
+            "data": {
+              "label": "数据流转设计",
+              "shape": "rect"
+            },
+            "parentId": "ModuleA",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "MA8",
+            "type": "default",
+            "position": {
+              "x": 1312,
+              "y": 817
+            },
+            "data": {
+              "label": "推荐L2划分",
+              "shape": "rect"
+            },
+            "parentId": "ModuleA",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "MA9",
+            "type": "default",
+            "position": {
+              "x": 1306,
+              "y": 985
+            },
+            "data": {
+              "label": "写入文档+总结检验",
+              "shape": "rect"
+            },
+            "parentId": "ModuleA",
+            "width": 120,
+            "height": 48,
+            "measured": {
+              "width": 120,
+              "height": 48
+            }
+          },
+          {
+            "id": "MB1",
+            "type": "default",
+            "position": {
+              "x": 1320,
+              "y": -639
+            },
+            "data": {
+              "label": "创建模块文档",
+              "shape": "rect"
+            },
+            "parentId": "ModuleB",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "MB2",
+            "type": "default",
+            "position": {
+              "x": 1320,
+              "y": -463
+            },
+            "data": {
+              "label": "L1设计分析",
+              "shape": "rect"
+            },
+            "parentId": "ModuleB",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "MB3",
+            "type": "default",
+            "position": {
+              "x": 1312,
+              "y": -227
+            },
+            "data": {
+              "label": "三套设计方案",
+              "shape": "diamond"
+            },
+            "parentId": "ModuleB",
+            "width": 124,
+            "height": 64,
+            "measured": {
+              "width": 124,
+              "height": 64
+            },
+            "selected": false,
+            "dragging": false
+          },
+          {
+            "id": "MB4",
+            "type": "default",
+            "position": {
+              "x": 1282,
+              "y": -43
+            },
+            "data": {
+              "label": "AskUserQuestion选择",
+              "shape": "rect"
+            },
+            "parentId": "ModuleB",
+            "width": 184,
+            "height": 48,
+            "measured": {
+              "width": 184,
+              "height": 48
+            }
+          },
+          {
+            "id": "MB5",
+            "type": "default",
+            "position": {
+              "x": 1320,
+              "y": 125
+            },
+            "data": {
+              "label": "记录决策",
+              "shape": "rect"
+            },
+            "parentId": "ModuleB",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "MB6",
+            "type": "default",
+            "position": {
+              "x": 1320,
+              "y": 293
+            },
+            "data": {
+              "label": "用户交互设计",
+              "shape": "rect"
+            },
+            "parentId": "ModuleB",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "MB7",
+            "type": "default",
+            "position": {
+              "x": 1320,
+              "y": 581
+            },
+            "data": {
+              "label": "数据流转设计",
+              "shape": "rect"
+            },
+            "parentId": "ModuleB",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "MB8",
+            "type": "default",
+            "position": {
+              "x": 1320,
+              "y": 749
+            },
+            "data": {
+              "label": "推荐L2划分",
+              "shape": "rect"
+            },
+            "parentId": "ModuleB",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "MB9",
+            "type": "default",
+            "position": {
+              "x": 1314,
+              "y": 985
+            },
+            "data": {
+              "label": "写入文档+总结检验",
+              "shape": "rect"
+            },
+            "parentId": "ModuleB",
+            "width": 120,
+            "height": 48,
+            "measured": {
+              "width": 120,
+              "height": 48
+            }
+          },
+          {
+            "id": "J",
+            "type": "default",
+            "position": {
+              "x": -14,
+              "y": -224
+            },
+            "data": {
+              "label": "L2子功能级-顺序执行",
+              "shape": "rect"
+            },
+            "parentId": "L2_L3",
+            "width": 136,
+            "height": 48,
+            "measured": {
+              "width": 136,
+              "height": 48
+            }
+          },
+          {
+            "id": "K",
+            "type": "default",
+            "position": {
+              "x": -10,
+              "y": -48
+            },
+            "data": {
+              "label": "L3组件级-顺序执行",
+              "shape": "rect"
+            },
+            "parentId": "L2_L3",
+            "width": 128,
+            "height": 48,
+            "measured": {
+              "width": 128,
+              "height": 48
+            }
+          },
+          {
+            "id": "LL",
+            "type": "default",
+            "position": {
+              "x": -2,
+              "y": 120
+            },
+            "data": {
+              "label": "L4实现级-可选",
+              "shape": "rect"
+            },
+            "parentId": "L2_L3",
+            "width": 112,
+            "height": 48,
+            "measured": {
+              "width": 112,
+              "height": 48
+            }
+          },
+          {
+            "id": "LM",
+            "type": "default",
+            "position": {
+              "x": -10,
+              "y": 288
+            },
+            "data": {
+              "label": "L5+持续细化-可选",
+              "shape": "rect"
+            },
+            "parentId": "L2_L3",
+            "width": 128,
+            "height": 48,
+            "measured": {
+              "width": 128,
+              "height": 48
+            }
+          },
+          {
+            "id": "N",
+            "type": "default",
+            "position": {
+              "x": 22.5,
+              "y": -436
+            },
+            "data": {
+              "label": "准备验证任务",
+              "shape": "rect"
+            },
+            "parentId": "Validate",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "O",
+            "type": "default",
+            "position": {
+              "x": 12.5,
+              "y": -268
+            },
+            "data": {
+              "label": "调用验证子Agent",
+              "shape": "rect"
+            },
+            "parentId": "Validate",
+            "width": 128,
+            "height": 48,
+            "measured": {
+              "width": 128,
+              "height": 48
+            }
+          },
+          {
+            "id": "P",
+            "type": "default",
+            "position": {
+              "x": -36.5,
+              "y": -40
+            },
+            "data": {
+              "label": "验证通过?",
+              "shape": "diamond"
+            },
+            "parentId": "Validate",
+            "width": 124,
+            "height": 64,
+            "measured": {
+              "width": 124,
+              "height": 64
+            },
+            "selected": false,
+            "dragging": false
+          },
+          {
+            "id": "Q",
+            "type": "default",
+            "position": {
+              "x": -112.5,
+              "y": 264
+            },
+            "data": {
+              "label": "进入文档集生成",
+              "shape": "rect"
+            },
+            "parentId": "Validate",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            },
+            "selected": false,
+            "dragging": false
+          },
+          {
+            "id": "R",
+            "type": "default",
+            "position": {
+              "x": 55.5,
+              "y": 264
+            },
+            "data": {
+              "label": "修正错误",
+              "shape": "rect"
+            },
+            "parentId": "Validate",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "S",
+            "type": "default",
+            "position": {
+              "x": 135.29861476369763,
+              "y": 437.43420360562595
+            },
+            "data": {
+              "label": "额外验证流程",
+              "shape": "rect"
+            },
+            "parentId": "Validate",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            },
+            "selected": false,
+            "dragging": false
+          },
+          {
+            "id": "T1",
+            "type": "default",
+            "position": {
+              "x": 0,
+              "y": -422
+            },
+            "data": {
+              "label": "需求类文档",
+              "shape": "rect"
+            },
+            "parentId": "DocGen",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            },
+            "selected": false,
+            "dragging": false
+          },
+          {
+            "id": "T2",
+            "type": "default",
+            "position": {
+              "x": 0,
+              "y": -194
+            },
+            "data": {
+              "label": "设计类文档",
+              "shape": "rect"
+            },
+            "parentId": "DocGen",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            },
+            "selected": false,
+            "dragging": false
+          },
+          {
+            "id": "T3",
+            "type": "default",
+            "position": {
+              "x": 0,
+              "y": -26
+            },
+            "data": {
+              "label": "测试类文档",
+              "shape": "rect"
+            },
+            "parentId": "DocGen",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            },
+            "selected": false,
+            "dragging": false
+          },
+          {
+            "id": "T4",
+            "type": "default",
+            "position": {
+              "x": 0,
+              "y": 142
+            },
+            "data": {
+              "label": "部署运维文档",
+              "shape": "rect"
+            },
+            "parentId": "DocGen",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "T5",
+            "type": "default",
+            "position": {
+              "x": 0,
+              "y": 310
+            },
+            "data": {
+              "label": "项目管理文档",
+              "shape": "rect"
+            },
+            "parentId": "DocGen",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "T6",
+            "type": "default",
+            "position": {
+              "x": 0,
+              "y": 478
+            },
+            "data": {
+              "label": "其他文档",
+              "shape": "rect"
+            },
+            "parentId": "DocGen",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "U",
+            "type": "default",
+            "position": {
+              "x": 12,
+              "y": -148
+            },
+            "data": {
+              "label": "批量验证子Agent",
+              "shape": "rect"
+            },
+            "parentId": "FinalValidate",
+            "width": 128,
+            "height": 48,
+            "measured": {
+              "width": 128,
+              "height": 48
+            }
+          },
+          {
+            "id": "V",
+            "type": "default",
+            "position": {
+              "x": -60,
+              "y": 20
+            },
+            "data": {
+              "label": "全部通过?",
+              "shape": "diamond"
+            },
+            "parentId": "FinalValidate",
+            "width": 124,
+            "height": 64,
+            "measured": {
+              "width": 124,
+              "height": 64
+            },
+            "selected": false,
+            "dragging": false
+          },
+          {
+            "id": "W",
+            "type": "default",
+            "position": {
+              "x": -62,
+              "y": 204
+            },
+            "data": {
+              "label": "完成✓",
+              "shape": "rect"
+            },
+            "parentId": "FinalValidate",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "X",
+            "type": "default",
+            "position": {
+              "x": 106,
+              "y": 204
+            },
+            "data": {
+              "label": "修正+额外验证",
+              "shape": "rect"
+            },
+            "parentId": "FinalValidate",
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            },
+            "selected": false,
+            "dragging": false
+          },
+          {
+            "id": "Start",
+            "type": "default",
+            "position": {
+              "x": 1297,
+              "y": 164
+            },
+            "data": {
+              "label": "Start",
+              "shape": "rect",
+              "styles": [
+                "fill:#e1f5fe"
+              ],
+              "_sourceLine": 1
+            },
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            },
+            "selected": false
+          },
+          {
+            "id": "L0",
+            "type": "default",
+            "position": {
+              "x": 1297,
+              "y": 964
+            },
+            "data": {
+              "label": "L0",
+              "shape": "rect",
+              "styles": [
+                "fill:#fff3e0"
+              ],
+              "_sourceLine": 5
+            },
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "L1",
+            "type": "default",
+            "position": {
+              "x": 1090,
+              "y": 2754
+            },
+            "data": {
+              "label": "L1",
+              "shape": "rect",
+              "styles": [
+                "fill:#f3e5f5"
+              ],
+              "_sourceLine": 14
+            },
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            },
+            "selected": false,
+            "dragging": false
+          },
+          {
+            "id": "L2_L3",
+            "type": "default",
+            "position": {
+              "x": 497,
+              "y": 2808
+            },
+            "data": {
+              "label": "L2_L3",
+              "shape": "rect",
+              "styles": [
+                "fill:#e8f5e9"
+              ],
+              "_sourceLine": 45
+            },
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            }
+          },
+          {
+            "id": "Validate",
+            "type": "default",
+            "position": {
+              "x": 474.5,
+              "y": 3820
+            },
+            "data": {
+              "label": "Validate",
+              "shape": "rect",
+              "styles": [
+                "fill:#ffebee"
+              ],
+              "_sourceLine": 52
+            },
+            "width": 112,
+            "height": 48,
+            "measured": {
+              "width": 112,
+              "height": 48
+            },
+            "selected": false,
+            "dragging": false
+          },
+          {
+            "id": "DocGen",
+            "type": "default",
+            "position": {
+              "x": 149,
+              "y": 4734
+            },
+            "data": {
+              "label": "DocGen",
+              "shape": "rect",
+              "styles": [
+                "fill:#e0f2f1"
+              ],
+              "_sourceLine": 62
+            },
+            "width": 108,
+            "height": 48,
+            "measured": {
+              "width": 108,
+              "height": 48
+            },
+            "selected": false,
+            "dragging": false
+          },
+          {
+            "id": "FinalValidate",
+            "type": "default",
+            "position": {
+              "x": 127,
+              "y": 5648
+            },
+            "data": {
+              "label": "FinalValidate",
+              "shape": "rect",
+              "styles": [
+                "fill:#fce4ec"
+              ],
+              "_sourceLine": 71
+            },
+            "width": 152,
+            "height": 48,
+            "measured": {
+              "width": 152,
+              "height": 48
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "LAB0",
+            "source": "A",
+            "target": "B",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 2
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LBC0",
+            "source": "B",
+            "target": "C",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 6
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LCD0",
+            "source": "C",
+            "target": "D",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 7
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LDE0",
+            "source": "D",
+            "target": "E",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 8
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LEF0",
+            "source": "E",
+            "target": "F",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 9
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LFG0",
+            "source": "F",
+            "target": "G",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 10
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LGH0",
+            "source": "G",
+            "target": "H",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 11
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LHI10",
+            "source": "H",
+            "target": "I1",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 15
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LI1I20",
+            "source": "I1",
+            "target": "I2",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 16
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LI2I30",
+            "source": "I2",
+            "target": "I3",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 17
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LI3IN0",
+            "source": "I3",
+            "target": "IN",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 18
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LI1MA10",
+            "source": "I1",
+            "target": "MA1",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 21
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LMA1MA20",
+            "source": "MA1",
+            "target": "MA2",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 22
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LMA2MA30",
+            "source": "MA2",
+            "target": "MA3",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 23
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LMA3MA40",
+            "source": "MA3",
+            "target": "MA4",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 24
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LMA4MA50",
+            "source": "MA4",
+            "target": "MA5",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 25
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LMA5MA60",
+            "source": "MA5",
+            "target": "MA6",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 26
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LMA6MA70",
+            "source": "MA6",
+            "target": "MA7",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 27
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LMA7MA80",
+            "source": "MA7",
+            "target": "MA8",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 28
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LMA8MA90",
+            "source": "MA8",
+            "target": "MA9",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 29
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LI2MB10",
+            "source": "I2",
+            "target": "MB1",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 33
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LMB1MB20",
+            "source": "MB1",
+            "target": "MB2",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 34
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LMB2MB30",
+            "source": "MB2",
+            "target": "MB3",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 35
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LMB3MB40",
+            "source": "MB3",
+            "target": "MB4",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 36
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LMB4MB50",
+            "source": "MB4",
+            "target": "MB5",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 37
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LMB5MB60",
+            "source": "MB5",
+            "target": "MB6",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 38
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LMB6MB70",
+            "source": "MB6",
+            "target": "MB7",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 39
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LMB7MB80",
+            "source": "MB7",
+            "target": "MB8",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 40
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LMB8MB90",
+            "source": "MB8",
+            "target": "MB9",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 41
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LINJ0",
+            "source": "IN",
+            "target": "J",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 46
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LJK0",
+            "source": "J",
+            "target": "K",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 47
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LKLL0",
+            "source": "K",
+            "target": "LL",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 48
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LLLLM0",
+            "source": "LL",
+            "target": "LM",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 49
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LLMN0",
+            "source": "LM",
+            "target": "N",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 53
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LNO0",
+            "source": "N",
+            "target": "O",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 54
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LOP0",
+            "source": "O",
+            "target": "P",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 55
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LPQ0",
+            "source": "P",
+            "target": "Q",
+            "data": {
+              "edgeStyle": "arrow",
+              "label": "是",
+              "length": 1,
+              "_sourceLine": 56
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "selected": false,
+            "type": "smoothstep"
+          },
+          {
+            "id": "LPR0",
+            "source": "P",
+            "target": "R",
+            "data": {
+              "edgeStyle": "arrow",
+              "label": "否",
+              "length": 1,
+              "_sourceLine": 57
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "selected": false,
+            "type": "smoothstep"
+          },
+          {
+            "id": "LRS0",
+            "source": "R",
+            "target": "S",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 58
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LSO0",
+            "source": "S",
+            "target": "O",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 59
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LQT10",
+            "source": "Q",
+            "target": "T1",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 63
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LT1T20",
+            "source": "T1",
+            "target": "T2",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 64
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LT2T30",
+            "source": "T2",
+            "target": "T3",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 65
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LT3T40",
+            "source": "T3",
+            "target": "T4",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 66
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LT4T50",
+            "source": "T4",
+            "target": "T5",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 67
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LT5T60",
+            "source": "T5",
+            "target": "T6",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 68
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LT6U0",
+            "source": "T6",
+            "target": "U",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 72
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LUV0",
+            "source": "U",
+            "target": "V",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 73
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LVW0",
+            "source": "V",
+            "target": "W",
+            "data": {
+              "edgeStyle": "arrow",
+              "label": "是",
+              "length": 1,
+              "_sourceLine": 74
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          },
+          {
+            "id": "LVX0",
+            "source": "V",
+            "target": "X",
+            "data": {
+              "edgeStyle": "arrow",
+              "label": "否",
+              "length": 1,
+              "_sourceLine": 75
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "selected": false,
+            "type": "smoothstep"
+          },
+          {
+            "id": "LXU0",
+            "source": "X",
+            "target": "U",
+            "data": {
+              "edgeStyle": "arrow",
+              "length": 1,
+              "_sourceLine": 76
+            },
+            "markerEnd": {
+              "type": "arrow",
+              "marker": "arrow_point"
+            },
+            "type": "smoothstep"
+          }
+        ],
+        "direction": "TB"
+      },
+      "consumed": {
+        "consumed": false,
+        "lastConsumedAt": null,
+        "canvasSource": "user"
+      },
+      "viewport": {
+        "x": 369.4441854934587,
+        "y": -2050.5945583590983,
+        "zoom": 0.6597539553864474
+      }
+    }
+  ],
+  "activeViewId": "935a2818-4a41-43fd-b1c8-ef428dd4532d"
+}

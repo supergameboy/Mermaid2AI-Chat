@@ -14,7 +14,7 @@
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { serializeMermaid } from '@mermaid2aichat/serializer';
+import { serializeMermaid, isGraphCanvasState } from '@mermaid2aichat/serializer';
 import { consumedReducer } from '../consumed-state-machine.js';
 import type { WsServer } from '../ws-server.js';
 import type { WorkspaceRegistry } from '../workspace-registry.js';
@@ -73,7 +73,22 @@ export function registerGetInputTool(
 
         if (isActiveView) {
           // === 活动视图：走现有逻辑（内存读取 + 标记已消费） ===
-          const { nodes, edges, direction } = storeState.getActiveCanvas();
+          const activeCanvas = storeState.getActiveCanvas();
+          // 第一批仅支持图结构类型（flowchart），非图结构类型不支持 get_input
+          if (!isGraphCanvasState(activeCanvas)) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: JSON.stringify({
+                  status: 'error',
+                  message: `不支持的图表类型: ${activeCanvas.diagramType}`,
+                  viewId: targetViewId,
+                  title: viewSummary.title,
+                }),
+              }],
+            };
+          }
+          const { nodes, edges, direction } = activeCanvas;
           const consumedState = storeState.getActiveConsumed();
 
           console.log('[get_input] 活动视图画布状态:', {
@@ -135,7 +150,7 @@ export function registerGetInputTool(
 
           // 4. 成功读取（consumed=false, canvasSource='user'）
           console.log('[get_input] 开始序列化...');
-          const serializeResult = serializeMermaid({ nodes, edges, direction });
+          const serializeResult = serializeMermaid({ diagramType: 'flowchart', nodes, edges, direction });
           console.log('[get_input] 序列化成功:', serializeResult.mermaid.substring(0, 100));
 
           // 触发 CONSUME 事件：标记为已消费
@@ -212,6 +227,8 @@ export function registerGetInputTool(
 
           // 成功读取（不标记已消费，不广播）
           const serializeResult = serializeMermaid(content.canvas);
+          // 图结构类型才有 nodes/edges/direction 字段
+          const graphCanvas = isGraphCanvasState(content.canvas) ? content.canvas : null;
           return {
             content: [{
               type: 'text' as const,
@@ -220,9 +237,10 @@ export function registerGetInputTool(
                 mermaid: serializeResult.mermaid,
                 viewId: targetViewId,
                 title: viewSummary.title,
-                nodeCount: content.canvas.nodes.length,
-                edgeCount: content.canvas.edges.length,
-                direction: content.canvas.direction,
+                diagramType: content.canvas.diagramType,
+                nodeCount: graphCanvas?.nodes.length ?? 0,
+                edgeCount: graphCanvas?.edges.length ?? 0,
+                direction: graphCanvas?.direction,
                 canvasSource: 'user',
                 note: '读取非活动视图，未标记已消费',
               }),

@@ -16,25 +16,18 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import type {
-  MermaidEdge,
-  MermaidNode,
-  FlowchartDirection,
+  CanvasState,
   Viewport,
   ViewSummary,
   ActiveViewPayload,
   ConsumedState,
 } from '@mermaid2aichat/serializer';
+import { isGraphCanvasState, migrateCanvasState } from '@mermaid2aichat/serializer';
 import type { WorkspaceRegistry } from './workspace-registry.js';
 import type { EditorStoreInstance, ViewContentLoader } from './store.js';
 import { consumedReducer } from './consumed-state-machine.js';
 
 // === 消息类型（联合类型，类型安全） ===
-
-export interface CanvasPayload {
-  nodes: MermaidNode[];
-  edges: MermaidEdge[];
-  direction: FlowchartDirection;
-}
 
 export interface ConsumedPayload {
   consumed: boolean;
@@ -58,7 +51,7 @@ export interface ReconnectSyncPayload {
 }
 
 export type WsServerMessage =
-  | { type: 'canvas_update'; payload: CanvasPayload; timestamp: number }
+  | { type: 'canvas_update'; payload: CanvasState; timestamp: number }
   | { type: 'consumed_update'; payload: ConsumedPayload; timestamp: number }
   | { type: 'viewport_update'; payload: ViewportPayload; timestamp: number }
   | { type: 'views_update'; payload: ViewsUpdatePayload; timestamp: number }
@@ -66,7 +59,7 @@ export type WsServerMessage =
   | { type: 'reconnect_sync'; payload: ReconnectSyncPayload; timestamp: number };
 
 export type WsClientMessage =
-  | { type: 'canvas_edit'; payload: CanvasPayload }
+  | { type: 'canvas_edit'; payload: CanvasState }
   | { type: 'reset_consumed' }
   | { type: 'viewport_edit'; payload: ViewportPayload }
   | { type: 'switch_view'; viewId: string }
@@ -115,23 +108,38 @@ class WsClientConnection {
     switch (msg.type) {
       case 'canvas_edit': {
         // 用户编辑画布 → 更新 Store + 触发 CANVAS_EDIT 事件
-        const payload = msg.payload;
+        // payload 是联合类型 CanvasState，根据 diagramType 分发到对应更新方法
+        const payload = migrateCanvasState(msg.payload);
         const state = this.store.getState();
-        state.updateActiveCanvas({
-          nodes: payload.nodes,
-          edges: payload.edges,
-          direction: payload.direction,
-        });
+        const oldDiagramType = state.getActiveCanvas().diagramType;
+        const typeChanged = payload.diagramType !== oldDiagramType;
+
+        if (isGraphCanvasState(payload) && !typeChanged) {
+          // 图结构类型且类型未变：部分更新（保留 diagramType）
+          state.updateActiveCanvas({
+            nodes: payload.nodes,
+            edges: payload.edges,
+            direction: payload.direction,
+            metadata: payload.metadata,
+          });
+        } else {
+          // 数据图表类型 或 图表类型变更：全量替换 canvas
+          state.updateActiveCanvasState(payload);
+        }
 
         // CANVAS_EDIT 事件重置 consumed
         const currentState = this.store.getState().getActiveConsumed();
         const newState = consumedReducer(currentState, { type: 'CANVAS_EDIT' });
         this.store.getState().updateActiveConsumed(newState);
 
-        // 显式广播给其他客户端
-        this.wsServer.broadcastCanvasUpdate(this.workspaceRoot, payload, this);
+        // 显式广播给其他客户端（canvas_update 携带完整 CanvasState）
+        this.wsServer.broadcastCanvasUpdate(this.workspaceRoot, this.store.getState().getActiveCanvas(), this);
         // 广播消费状态变化（CANVAS_EDIT 重置了 consumed）
         this.wsServer.broadcastConsumedUpdate(this.workspaceRoot, this.store.getState().getActiveConsumed());
+        // 若图表类型变更，广播 views_update（ViewSummary.diagramType 已更新）
+        if (typeChanged) {
+          this.wsServer.broadcastViewsUpdate(this.workspaceRoot);
+        }
         break;
       }
 
@@ -158,7 +166,8 @@ class WsClientConnection {
 
       case 'switch_view': {
         // 用户切换标签页 → 异步加载 + 广播
-        this.store.getState().switchView(msg.viewId, this.loader).then(() => {
+        this.store.getState().switchView(msg.viewId, this.loader).then((switched) => {
+          if (!switched) return; // 未切换（已是活动视图），不广播
           this.wsServer.broadcastViewsUpdate(this.workspaceRoot);
           this.wsServer.broadcastActiveViewUpdate(this.workspaceRoot);
         }).catch((err) => {
@@ -180,19 +189,20 @@ class WsClientConnection {
           });
         }
 
-        // 2. 创建新视图
+        // 2. 创建新视图（默认 flowchart 类型）
+        const emptyCanvas = { diagramType: 'flowchart' as const, nodes: [], edges: [], direction: 'TD' as const };
         const newViewId = state.createView({
           title: msg.payload?.title ?? null,
           source: 'user',
           sessionId: null,
-          canvas: { nodes: [], edges: [], direction: 'TD' },
+          canvas: emptyCanvas,
           consumed: { consumed: false, lastConsumedAt: null, canvasSource: null },
           viewport: { x: 0, y: 0, zoom: 1 },
         });
 
         // 3. 保存新视图内容到磁盘
         await this.loader.saveViewContent(newViewId, {
-          canvas: { nodes: [], edges: [], direction: 'TD' },
+          canvas: emptyCanvas,
           consumed: { consumed: false, lastConsumedAt: null, canvasSource: null },
           viewport: { x: 0, y: 0, zoom: 1 },
         });
@@ -386,11 +396,11 @@ export class WsServer {
     this.broadcastToWorkspace(workspaceRoot, message);
   }
 
-  /** 广播画布更新（canvas_update）给指定工作区除发送方外所有客户端 */
-  broadcastCanvasUpdate(workspaceRoot: string, payload: CanvasPayload, excludeClient?: WsClientConnection): void {
+  /** 广播画布更新（canvas_update，携带完整 CanvasState）给指定工作区除发送方外所有客户端 */
+  broadcastCanvasUpdate(workspaceRoot: string, canvas: CanvasState, excludeClient?: WsClientConnection): void {
     const message: WsServerMessage = {
       type: 'canvas_update',
-      payload,
+      payload: canvas,
       timestamp: Date.now(),
     };
     this.broadcastToWorkspace(workspaceRoot, message, excludeClient);

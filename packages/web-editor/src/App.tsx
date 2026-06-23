@@ -4,14 +4,17 @@
  * 职责：WebSocket 连接 + 状态管理，画布 UI 由 @mermaid2aichat/editor 提供
  *
  * 数据流：
- * - 本地操作：Canvas → onCanvasEdit → sendCanvasEdit → WebSocket → 服务端
- * - 服务端同步：WebSocket → store → Canvas syncNodes/syncEdges
+ * - 本地操作（图结构类型）：Canvas → onCanvasEdit → sendCanvasEdit → WebSocket → 服务端
+ * - 本地操作（数据图表类型）：Canvas → onCanvasUpdate → sendCanvasUpdate → WebSocket → 服务端
+ * - 服务端同步：WebSocket → store.activeCanvas → Canvas syncCanvas
  * - 视图操作：TabBar → sendSwitchView 等 → WebSocket → 服务端 → 广播 → store 更新
+ * - 图表类型切换：Toolbar/CodeEditor → onDiagramTypeChange → 弹窗确认 → 构造新 CanvasState → sendCanvasUpdate
  */
-import { useCallback } from 'react';
-import { Canvas, TabBar } from '@mermaid2aichat/editor';
+import { useCallback, useState } from 'react';
+import { Canvas, TabBar, TypeSwitchDialog } from '@mermaid2aichat/editor';
 import type { CanvasSnapshot, ConnectionStatusType } from '@mermaid2aichat/editor';
-import type { Viewport } from '@mermaid2aichat/serializer';
+import type { CanvasState, DiagramType, Viewport } from '@mermaid2aichat/serializer';
+import { createEmptyCanvasState } from '@mermaid2aichat/serializer';
 import '@mermaid2aichat/editor/styles.css';
 
 import { useEditorStore } from './store.js';
@@ -37,6 +40,7 @@ export default function App() {
   const {
     status,
     sendCanvasEdit,
+    sendCanvasUpdate,
     sendResetConsumed,
     sendViewportEdit,
     sendSwitchView,
@@ -45,6 +49,9 @@ export default function App() {
     sendRenameView,
     sendReorderViews,
   } = useWebSocket(buildWsUrl());
+
+  // 图表类型切换弹窗状态
+  const [pendingTypeSwitch, setPendingTypeSwitch] = useState<DiagramType | null>(null);
 
   const handleCanvasEdit = useCallback(
     (canvas: CanvasSnapshot) => {
@@ -72,6 +79,37 @@ export default function App() {
     [sendViewportEdit]
   );
 
+  // 数据图表类型更新回调 → 发送 canvas_update 到服务端 + 同步本地 store
+  const handleCanvasUpdate = useCallback(
+    (canvas: CanvasState) => {
+      // 先同步本地 store（数据图表类型全量替换）
+      store.setActiveCanvas(canvas);
+      // 发送到服务端
+      sendCanvasUpdate(canvas);
+    },
+    [store, sendCanvasUpdate]
+  );
+
+  // 图表类型切换回调 → 弹出确认弹窗
+  const handleDiagramTypeChange = useCallback((newType: DiagramType) => {
+    setPendingTypeSwitch(newType);
+  }, []);
+
+  // 弹窗确认 → 清空画布并切换到新类型
+  const handleTypeSwitchConfirm = useCallback(() => {
+    if (!pendingTypeSwitch) return;
+    const newCanvas = createEmptyCanvasState(pendingTypeSwitch);
+    // 同步本地 store + 发送到服务端
+    store.setActiveCanvas(newCanvas);
+    sendCanvasUpdate(newCanvas);
+    setPendingTypeSwitch(null);
+  }, [pendingTypeSwitch, store, sendCanvasUpdate]);
+
+  // 弹窗取消
+  const handleTypeSwitchCancel = useCallback(() => {
+    setPendingTypeSwitch(null);
+  }, []);
+
   return (
     <div className="app-container">
       <TabBar
@@ -84,6 +122,7 @@ export default function App() {
         onReorderViews={sendReorderViews}
       />
       <Canvas
+        syncCanvas={store.activeCanvas}
         syncNodes={store.nodes}
         syncEdges={store.edges}
         syncDirection={store.direction}
@@ -93,10 +132,20 @@ export default function App() {
         lastConsumedAt={store.lastConsumedAt}
         connectionStatus={status as ConnectionStatusType}
         onCanvasEdit={handleCanvasEdit}
+        onCanvasUpdate={handleCanvasUpdate}
         onDirectionChange={handleDirectionChange}
         onResetConsumed={handleResetConsumed}
         onViewportChange={handleViewportChange}
+        onDiagramTypeChange={handleDiagramTypeChange}
       />
+      {pendingTypeSwitch && (
+        <TypeSwitchDialog
+          currentType={store.activeCanvas.diagramType}
+          newType={pendingTypeSwitch}
+          onConfirm={handleTypeSwitchConfirm}
+          onCancel={handleTypeSwitchCancel}
+        />
+      )}
     </div>
   );
 }

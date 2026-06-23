@@ -16,13 +16,16 @@ import type {
   CanvasState,
   CanvasSource,
   ConsumedState,
+  DiagramType,
   FlowchartDirection,
+  GraphCanvasUpdate,
   MermaidEdge,
   MermaidNode,
   Viewport,
   ViewSource,
   ViewSummary,
 } from '@mermaid2aichat/serializer';
+import { migrateCanvasState } from '@mermaid2aichat/serializer';
 import { randomUUID } from 'crypto';
 
 /** 最大视图数限制 */
@@ -30,13 +33,6 @@ export const MAX_VIEWS = 100;
 
 /** Store 实例类型（UseBoundStore，含 getState/setState/subscribe） */
 export type EditorStoreInstance = ReturnType<typeof createEditorStore>;
-
-/** 画布快照（用于 WebSocket 传输） */
-export interface CanvasPayload {
-  nodes: MermaidNode[];
-  edges: MermaidEdge[];
-  direction: FlowchartDirection;
-}
 
 /** 消费状态快照（用于 WebSocket 传输） */
 export interface ConsumedPayload {
@@ -58,7 +54,7 @@ export interface CreateViewParams {
   source: ViewSource;
   /** AI 会话 ID（source='ai' 时必传） */
   sessionId?: string | null;
-  /** 画布状态 */
+  /** 画布状态（diagramType 从 canvas.diagramType 派生） */
   canvas: CanvasState;
   /** 消费状态 */
   consumed: ConsumedState;
@@ -100,7 +96,7 @@ export interface EditorStore {
   /** 创建新视图并设为活动视图 */
   createView: (params: CreateViewParams) => string;
   /** 切换活动视图（异步，涉及磁盘 I/O） */
-  switchView: (viewId: string, loader: ViewContentLoader) => Promise<void>;
+  switchView: (viewId: string, loader: ViewContentLoader) => Promise<boolean>;
   /** 关闭视图（若关闭活动视图，自动切换到相邻视图） */
   closeView: (viewId: string, loader: ViewContentLoader) => Promise<void>;
   /** 重命名视图 */
@@ -109,8 +105,12 @@ export interface EditorStore {
   reorderViews: (orderedIds: string[]) => void;
 
   // === 活动视图内容操作 ===
-  /** 更新活动画布（整体替换） */
-  updateActiveCanvas: (canvas: Partial<CanvasState>) => void;
+  /** 更新活动画布（图结构类型部分更新） */
+  updateActiveCanvas: (canvas: GraphCanvasUpdate) => void;
+  /** 更新活动画布（全量替换，允许 diagramType 变更）
+   * 用于数据图表类型编辑和图表类型切换
+   */
+  updateActiveCanvasState: (canvas: CanvasState) => void;
   /** 更新活动消费状态 */
   updateActiveConsumed: (consumed: Partial<ConsumedState>) => void;
   /** 更新活动视口 */
@@ -145,9 +145,9 @@ export interface EditorStore {
   subscribe: (listener: (state: EditorStore) => void) => () => void;
 }
 
-/** 创建空白画布 */
+/** 创建空白画布（flowchart 类型） */
 function createEmptyCanvas(): CanvasState {
-  return { nodes: [], edges: [], direction: 'TD' };
+  return { diagramType: 'flowchart', nodes: [], edges: [], direction: 'TD' };
 }
 
 /** 创建默认消费状态 */
@@ -184,6 +184,8 @@ export function createEditorStore() {
 
       const now = Date.now();
       const viewId = randomUUID();
+      // diagramType 从 canvas 派生，视图绑定后不可变更
+      const diagramType: DiagramType = params.canvas.diagramType;
       const newView: ViewSummary = {
         id: viewId,
         title: params.title ?? null,
@@ -191,6 +193,7 @@ export function createEditorStore() {
         updatedAt: now,
         sessionId: params.sessionId ?? null,
         source: params.source,
+        diagramType,
       };
 
       set({
@@ -208,7 +211,7 @@ export function createEditorStore() {
     switchView: async (viewId, loader) => {
       const state = get();
       if (state.activeViewId === viewId) {
-        return; // 已是活动视图，无需切换
+        return false; // 已是活动视图，未切换
       }
 
       const targetView = state.views.find((v) => v.id === viewId);
@@ -235,14 +238,16 @@ export function createEditorStore() {
         viewport: createDefaultViewport(),
       };
 
-      // 3. 更新活动视图状态
+      // 3. 更新活动视图状态（迁移旧版无 diagramType 的 canvas）
       set({
         activeViewId: viewId,
-        activeCanvas: viewContent.canvas,
+        activeCanvas: migrateCanvasState(viewContent.canvas),
         activeConsumed: viewContent.consumed,
         activeViewport: viewContent.viewport,
         activeTitle: targetView.title,
       });
+
+      return true; // 切换成功
     },
 
     closeView: async (viewId, loader) => {
@@ -271,6 +276,7 @@ export function createEditorStore() {
             updatedAt: now,
             sessionId: null,
             source: 'user',
+            diagramType: 'flowchart',
           };
           set({
             views: [defaultView],
@@ -298,7 +304,7 @@ export function createEditorStore() {
           set({
             views: newViews,
             activeViewId: adjacentView.id,
-            activeCanvas: viewContent.canvas,
+            activeCanvas: migrateCanvasState(viewContent.canvas),
             activeConsumed: viewContent.consumed,
             activeViewport: viewContent.viewport,
             activeTitle: adjacentView.title,
@@ -354,10 +360,25 @@ export function createEditorStore() {
         return;
       }
 
+      // 仅图结构类型支持部分更新；保留原 diagramType
+      const currentCanvas = state.activeCanvas;
+      if (currentCanvas.diagramType !== 'flowchart' &&
+          currentCanvas.diagramType !== 'sequenceDiagram' &&
+          currentCanvas.diagramType !== 'classDiagram' &&
+          currentCanvas.diagramType !== 'erDiagram' &&
+          currentCanvas.diagramType !== 'mindmap' &&
+          currentCanvas.diagramType !== 'stateDiagram' &&
+          currentCanvas.diagramType !== 'architecture') {
+        // 数据图表类型不支持部分更新（应由 updateActiveCanvasState 处理）
+        return;
+      }
+
       const newCanvas = {
-        nodes: canvas.nodes ?? state.activeCanvas.nodes,
-        edges: canvas.edges ?? state.activeCanvas.edges,
-        direction: canvas.direction ?? state.activeCanvas.direction,
+        diagramType: currentCanvas.diagramType,
+        nodes: canvas.nodes ?? currentCanvas.nodes,
+        edges: canvas.edges ?? currentCanvas.edges,
+        direction: canvas.direction ?? currentCanvas.direction,
+        metadata: canvas.metadata ?? currentCanvas.metadata,
       };
 
       // 更新活动视图的 updatedAt
@@ -368,6 +389,34 @@ export function createEditorStore() {
       set({
         views: newViews,
         activeCanvas: newCanvas,
+      });
+    },
+
+    updateActiveCanvasState: (canvas) => {
+      const state = get();
+      if (!state.activeViewId) {
+        return;
+      }
+
+      // 允许 diagramType 变更（用户切换图表类型）
+      // 同步更新 ViewSummary 的 diagramType 字段
+      const currentCanvas = state.activeCanvas;
+      const typeChanged = canvas.diagramType !== currentCanvas.diagramType;
+
+      // 更新活动视图的 updatedAt，若类型变更则同步 diagramType
+      const newViews = state.views.map((v) =>
+        v.id === state.activeViewId
+          ? {
+              ...v,
+              updatedAt: Date.now(),
+              ...(typeChanged ? { diagramType: canvas.diagramType } : {}),
+            }
+          : v
+      );
+
+      set({
+        views: newViews,
+        activeCanvas: canvas,
       });
     },
 
@@ -447,6 +496,7 @@ export function createEditorStore() {
           updatedAt: now,
           sessionId: null,
           source: 'user',
+          diagramType: 'flowchart',
         };
         set({
           views: [defaultView],
@@ -459,14 +509,16 @@ export function createEditorStore() {
         return;
       }
 
-      // 恢复持久化数据
+      // 恢复持久化数据（迁移旧版无 diagramType 的 canvas）
       const activeViewId = data.activeViewId ?? data.views[0].id;
       const activeView = data.views.find((v) => v.id === activeViewId) ?? data.views[0];
 
       set({
         views: data.views,
         activeViewId,
-        activeCanvas: data.activeContent?.canvas ?? createEmptyCanvas(),
+        activeCanvas: data.activeContent
+          ? migrateCanvasState(data.activeContent.canvas)
+          : createEmptyCanvas(),
         activeConsumed: data.activeContent?.consumed ?? createDefaultConsumed(),
         activeViewport: data.activeContent?.viewport ?? createDefaultViewport(),
         activeTitle: activeView.title,

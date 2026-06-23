@@ -5,17 +5,12 @@
  * 消息协议与服务端 ws-server.ts 一致
  *
  * 多标签页架构：支持 views_update / active_view_update / 扩展 reconnect_sync
+ * 多图表类型：canvas_update / canvas_edit 消息携带完整 CanvasState（联合类型）
  */
 import WebSocket from 'ws';
-import type { MermaidEdge, MermaidNode, FlowchartDirection, CanvasSource, Viewport, ViewSummary } from '@mermaid2aichat/serializer';
+import type { CanvasState, CanvasSource, Viewport, ViewSummary } from '@mermaid2aichat/serializer';
 
 // === 消息类型（与服务端一致，联合类型） ===
-
-export interface CanvasPayload {
-  nodes: MermaidNode[];
-  edges: MermaidEdge[];
-  direction: FlowchartDirection;
-}
 
 export interface ConsumedPayload {
   consumed: boolean;
@@ -34,7 +29,7 @@ export interface ViewsUpdatePayload {
 
 export interface ActiveViewPayload {
   viewId: string;
-  canvas: CanvasPayload;
+  canvas: CanvasState;
   consumed: ConsumedPayload;
   viewport: Viewport;
   title: string | null;
@@ -47,7 +42,7 @@ export interface ReconnectSyncPayload {
 }
 
 export type WsServerMessage =
-  | { type: 'canvas_update'; payload: CanvasPayload; timestamp: number }
+  | { type: 'canvas_update'; payload: CanvasState; timestamp: number }
   | { type: 'consumed_update'; payload: ConsumedPayload; timestamp: number }
   | { type: 'viewport_update'; payload: ViewportPayload; timestamp: number }
   | { type: 'views_update'; payload: ViewsUpdatePayload; timestamp: number }
@@ -55,7 +50,7 @@ export type WsServerMessage =
   | { type: 'reconnect_sync'; payload: ReconnectSyncPayload; timestamp: number };
 
 export type WsClientMessage =
-  | { type: 'canvas_edit'; payload: CanvasPayload }
+  | { type: 'canvas_edit'; payload: CanvasState }
   | { type: 'reset_consumed' }
   | { type: 'viewport_edit'; payload: ViewportPayload }
   | { type: 'switch_view'; viewId: string }

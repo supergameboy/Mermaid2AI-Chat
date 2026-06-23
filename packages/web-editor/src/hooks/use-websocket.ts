@@ -5,15 +5,21 @@
  * 多标签页架构：
  * - 处理 views_update / active_view_update / reconnect_sync 消息
  * - 发送 switch_view / create_view / close_view / rename_view / reorder_views 消息
+ *
+ * 多图表类型：
+ * - canvas_update 消息携带完整 CanvasState（联合类型）
+ * - canvas_edit 消息发送 CanvasSnapshot（图结构类型）
+ * - canvas_update_full 消息发送 CanvasState（数据图表类型全量更新）
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useEditorStore } from '../store.js';
 import type { ActiveViewPayload } from '../store.js';
-import type { MermaidNode, MermaidEdge, FlowchartDirection, Viewport, ViewSummary } from '@mermaid2aichat/serializer';
+import type { CanvasState, GraphCanvasState, MermaidNode, MermaidEdge, FlowchartDirection, Viewport, ViewSummary } from '@mermaid2aichat/serializer';
 
 type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
 
-interface CanvasPayload {
+/** 图结构类型画布快照（用于 canvas_edit 消息） */
+interface CanvasSnapshot {
   nodes: MermaidNode[];
   edges: MermaidEdge[];
   direction: FlowchartDirection;
@@ -41,12 +47,23 @@ interface ReconnectSyncPayload {
 }
 
 type WsServerMessage =
-  | { type: 'canvas_update'; payload: CanvasPayload; timestamp: number }
+  | { type: 'canvas_update'; payload: CanvasState; timestamp: number }
   | { type: 'consumed_update'; payload: ConsumedPayload; timestamp: number }
   | { type: 'viewport_update'; payload: ViewportPayload; timestamp: number }
   | { type: 'views_update'; payload: ViewsUpdatePayload; timestamp: number }
   | { type: 'active_view_update'; payload: ActiveViewPayload; timestamp: number }
   | { type: 'reconnect_sync'; payload: ReconnectSyncPayload; timestamp: number };
+
+/** 客户端→服务端消息类型 */
+type WsClientMessage =
+  | { type: 'canvas_edit'; payload: CanvasState }
+  | { type: 'reset_consumed' }
+  | { type: 'viewport_edit'; payload: ViewportPayload }
+  | { type: 'switch_view'; viewId: string }
+  | { type: 'create_view'; payload?: { title?: string | null } }
+  | { type: 'close_view'; viewId: string }
+  | { type: 'rename_view'; viewId: string; title: string }
+  | { type: 'reorder_views'; orderedIds: string[] };
 
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
 
@@ -85,9 +102,8 @@ export function useWebSocket(url: string = 'ws://localhost:14514/ws') {
 
         switch (msg.type) {
           case 'canvas_update': {
-            const payload = msg.payload;
-            // 服务端画布更新 → 同步到本地（不触发 consumed 重置）
-            s.setCanvasSync(payload.nodes, payload.edges, payload.direction);
+            // 服务端画布更新（联合类型 CanvasState）→ 同步到本地
+            s.setCanvasSync(msg.payload);
             break;
           }
 
@@ -166,32 +182,46 @@ export function useWebSocket(url: string = 'ws://localhost:14514/ws') {
 
   // === 发送消息方法 ===
 
-  // 发送画布编辑到服务端
-  const sendCanvasEdit = useCallback((canvas?: { nodes: MermaidNode[]; edges: MermaidEdge[]; direction: FlowchartDirection }) => {
+  // 发送画布编辑到服务端（图结构类型快照）
+  const sendCanvasEdit = useCallback((canvas?: CanvasSnapshot) => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) return;
     const s = store.getState();
-    const data = canvas ?? s.getCanvas();
-    wsRef.current.send(JSON.stringify({
-      type: 'canvas_edit',
-      payload: data,
-    }));
+    // 从 activeCanvas 构造完整 CanvasState 发送到服务端
+    const activeCanvas = s.getActiveCanvas();
+    // 图结构类型才发送 canvas_edit
+    if (!isGraphCanvasStateLocal(activeCanvas)) return;
+    const snapshot = canvas ?? s.getCanvas();
+    // 类型已收窄为 GraphCanvasState，构造完整 CanvasState
+    const fullCanvas: GraphCanvasState = {
+      ...activeCanvas,
+      nodes: snapshot.nodes,
+      edges: snapshot.edges,
+      direction: snapshot.direction,
+    };
+    const msg: WsClientMessage = { type: 'canvas_edit', payload: fullCanvas };
+    wsRef.current.send(JSON.stringify(msg));
   }, [store]);
+
+  // 发送画布更新到服务端（数据图表类型全量更新）
+  const sendCanvasUpdate = useCallback((canvas: CanvasState) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+    const msg: WsClientMessage = { type: 'canvas_edit', payload: canvas };
+    wsRef.current.send(JSON.stringify(msg));
+  }, []);
 
   // 发送重置消费状态到服务端
   const sendResetConsumed = useCallback(() => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) return;
     wsRef.current.send(JSON.stringify({
       type: 'reset_consumed',
-    }));
+    } satisfies WsClientMessage));
   }, []);
 
   // 发送视口变化到服务端（用户平移/缩放触发）
   const sendViewportEdit = useCallback((viewport: Viewport) => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({
-      type: 'viewport_edit',
-      payload: { viewport },
-    }));
+    const msg: WsClientMessage = { type: 'viewport_edit', payload: { viewport } };
+    wsRef.current.send(JSON.stringify(msg));
   }, []);
 
   // === 视图操作（客户端→服务端） ===
@@ -199,47 +229,36 @@ export function useWebSocket(url: string = 'ws://localhost:14514/ws') {
   // 切换活动视图
   const sendSwitchView = useCallback((viewId: string) => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({
-      type: 'switch_view',
-      viewId,
-    }));
+    const msg: WsClientMessage = { type: 'switch_view', viewId };
+    wsRef.current.send(JSON.stringify(msg));
   }, []);
 
   // 新建空白视图
   const sendCreateView = useCallback((title?: string | null) => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({
-      type: 'create_view',
-      payload: { title: title ?? null },
-    }));
+    const msg: WsClientMessage = { type: 'create_view', payload: { title: title ?? null } };
+    wsRef.current.send(JSON.stringify(msg));
   }, []);
 
   // 关闭视图
   const sendCloseView = useCallback((viewId: string) => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({
-      type: 'close_view',
-      viewId,
-    }));
+    const msg: WsClientMessage = { type: 'close_view', viewId };
+    wsRef.current.send(JSON.stringify(msg));
   }, []);
 
   // 重命名视图
   const sendRenameView = useCallback((viewId: string, title: string) => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({
-      type: 'rename_view',
-      viewId,
-      title,
-    }));
+    const msg: WsClientMessage = { type: 'rename_view', viewId, title };
+    wsRef.current.send(JSON.stringify(msg));
   }, []);
 
   // 重排序视图
   const sendReorderViews = useCallback((orderedIds: string[]) => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({
-      type: 'reorder_views',
-      orderedIds,
-    }));
+    const msg: WsClientMessage = { type: 'reorder_views', orderedIds };
+    wsRef.current.send(JSON.stringify(msg));
   }, []);
 
   useEffect(() => {
@@ -255,6 +274,7 @@ export function useWebSocket(url: string = 'ws://localhost:14514/ws') {
   return {
     status,
     sendCanvasEdit,
+    sendCanvasUpdate,
     sendResetConsumed,
     sendViewportEdit,
     // 视图操作
@@ -264,4 +284,17 @@ export function useWebSocket(url: string = 'ws://localhost:14514/ws') {
     sendRenameView,
     sendReorderViews,
   };
+}
+
+/** 本地图结构类型守卫（避免循环依赖） */
+function isGraphCanvasStateLocal(canvas: CanvasState): canvas is GraphCanvasState {
+  return (
+    canvas.diagramType === 'flowchart' ||
+    canvas.diagramType === 'sequenceDiagram' ||
+    canvas.diagramType === 'classDiagram' ||
+    canvas.diagramType === 'erDiagram' ||
+    canvas.diagramType === 'mindmap' ||
+    canvas.diagramType === 'stateDiagram' ||
+    canvas.diagramType === 'architecture'
+  );
 }

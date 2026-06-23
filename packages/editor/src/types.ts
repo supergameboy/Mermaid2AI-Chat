@@ -3,7 +3,10 @@
  */
 import type {
   CanvasSource,
+  CanvasState,
+  DiagramType,
   FlowchartDirection,
+  GraphMetadata,
   MermaidEdge,
   MermaidNode,
   Viewport,
@@ -17,6 +20,8 @@ export interface CanvasSnapshot {
   nodes: MermaidNode[];
   edges: MermaidEdge[];
   direction: FlowchartDirection;
+  /** architecture 等类型的元数据（如 groups） */
+  metadata?: GraphMetadata;
 }
 
 /**
@@ -35,6 +40,8 @@ export interface CanvasProps {
   syncDirection: FlowchartDirection;
   /** 服务端同步的视口（平移/缩放） */
   syncViewport: Viewport | null;
+  /** 服务端同步的元数据（architecture 的 groups 等） */
+  syncMetadata?: GraphMetadata;
 
   /** 消费状态 */
   consumed: boolean;
@@ -48,10 +55,18 @@ export interface CanvasProps {
 
   /** 画布编辑回调（用户操作触发，外部负责发送到服务端） */
   onCanvasEdit: (canvas: CanvasSnapshot) => void;
+  /** 画布状态更新回调（跨类型切换时使用，传递完整 CanvasState）
+   * 代码编辑器修改导致图表类型变更时，直接应用解析结果，不弹窗、不清空
+   */
+  onCanvasUpdate?: (canvas: CanvasState) => void;
   /** 方向变化回调 */
   onDirectionChange: (dir: FlowchartDirection) => void;
   /** 重置消费状态回调 */
   onResetConsumed: () => void;
   /** 视口变化回调（用户平移/缩放触发，外部负责发送 viewport_edit 到服务端） */
   onViewportChange: (viewport: Viewport) => void;
+  /** 图表类型切换回调（用户通过 Toolbar 下拉或代码编辑器首行修改触发）
+   * 外部负责弹窗确认 + 构造新类型 CanvasState + 发送到服务端
+   */
+  onDiagramTypeChange?: (newType: DiagramType) => void;
 }

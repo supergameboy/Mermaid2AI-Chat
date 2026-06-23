@@ -3,15 +3,24 @@
  * 将 mermaid 代码渲染为可视化画布并展示给用户
  *
  * 多标签页架构：每次调用创建新标签页，不覆盖已有视图
+ * 多图表类型：支持 12 种 Mermaid 图表类型，可通过 diagramType 参数显式指定
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { parseMermaid } from '@mermaid2aichat/serializer';
+import { parseMermaid, isGraphCanvasState, detectDiagramType } from '@mermaid2aichat/serializer';
+import type { DiagramType } from '@mermaid2aichat/serializer';
 import type { WsServer } from '../ws-server.js';
 import type { WorkspaceRegistry } from '../workspace-registry.js';
 
 /** 获取或创建 sessionId 的函数类型 */
 type GetSessionIdFn = (server: McpServer) => string;
+
+/** 所有支持的图表类型（用于 zod schema enum） */
+const DIAGRAM_TYPES: DiagramType[] = [
+  'flowchart', 'sequenceDiagram', 'classDiagram', 'erDiagram',
+  'mindmap', 'stateDiagram', 'architecture',
+  'gantt', 'pie', 'timeline', 'quadrantChart', 'xychart',
+];
 
 export function registerCreateViewTool(
   server: McpServer,
@@ -21,12 +30,15 @@ export function registerCreateViewTool(
 ): void {
   server.tool(
     'create_view',
-    '将mermaid流程图代码渲染为可视化画布并展示给用户。每次调用创建新标签页，不覆盖已有视图。',
+    '将mermaid代码渲染为可视化画布并展示给用户。支持12种图表类型（flowchart/sequenceDiagram/classDiagram/erDiagram/mindmap/stateDiagram/architecture/gantt/pie/timeline/quadrantChart/xychart）。每次调用创建新标签页，不覆盖已有视图。',
     {
-      mermaid: z.string().describe('Mermaid flowchart代码，例如: flowchart TD\n  A[开始] --> B[结束]'),
+      mermaid: z.string().describe('Mermaid 代码，例如: flowchart TD\n  A[开始] --> B[结束]'),
       title: z.string().optional().describe('可选的图表标题'),
+      diagramType: z.enum(DIAGRAM_TYPES as [DiagramType, ...DiagramType[]]).optional().describe(
+        '图表类型。如不指定，将根据 mermaid 代码自动检测'
+      ),
     },
-    async ({ mermaid, title }, extra) => {
+    async ({ mermaid, title, diagramType }, extra) => {
       try {
         // 严格校验 workspaceRoot（无 fallback）
         const workspaceRoot = extra.requestInfo?.headers?.['x-workspace-root'] as string | undefined;
@@ -36,19 +48,28 @@ export function registerCreateViewTool(
 
         const { store, persistence } = await registry.getOrCreate(workspaceRoot);
 
-        console.log('[create_view] 收到请求, title:', title, 'mermaid长度:', mermaid.length);
+        console.log('[create_view] 收到请求, title:', title, 'diagramType:', diagramType ?? 'auto', 'mermaid长度:', mermaid.length);
 
-        // 解析 mermaid 代码
-        const parseResult = parseMermaid(mermaid);
+        // 确定 diagramType：优先使用参数，否则自动检测
+        const detectedType = diagramType ?? detectDiagramType(mermaid) ?? 'flowchart';
+
+        // 解析 mermaid 代码（传入 diagramType 避免重复检测）
+        const parseResult = parseMermaid(mermaid, { diagramType: detectedType });
+        // 图结构类型才有 nodes/edges 字段
+        const graphCanvas = isGraphCanvasState(parseResult.canvas) ? parseResult.canvas : null;
+        const nodeCount = graphCanvas?.nodes.length ?? 0;
+        const edgeCount = graphCanvas?.edges.length ?? 0;
         console.log('[create_view] 解析结果:', {
+          diagramType: parseResult.canvas.diagramType,
           success: parseResult.success,
-          nodeCount: parseResult.canvas.nodes.length,
-          edgeCount: parseResult.canvas.edges.length,
+          nodeCount,
+          edgeCount,
           errors: parseResult.errors.length,
         });
 
-        if (!parseResult.success && parseResult.canvas.nodes.length === 0) {
-          // 解析失败且无节点 → 返回错误
+        if (!parseResult.success && nodeCount === 0 && parseResult.canvas.diagramType === detectedType) {
+          // 解析失败且无有效数据 → 返回错误
+          // 注意：数据图表类型即使解析有 errors，canvas 仍可能含有效数据，不在此拦截
           return {
             content: [{
               type: 'text' as const,
@@ -117,7 +138,7 @@ export function registerCreateViewTool(
         wsServer.broadcastViewsUpdate(workspaceRoot);
         wsServer.broadcastActiveViewUpdate(workspaceRoot);
 
-        console.log('[create_view] 完成, viewId:', viewId, '已广播到客户端');
+        console.log('[create_view] 完成, viewId:', viewId, 'diagramType:', parseResult.canvas.diagramType, '已广播到客户端');
 
         return {
           content: [{
@@ -127,8 +148,9 @@ export function registerCreateViewTool(
               message: '已创建新标签页并展示给用户',
               viewId,
               title: title ?? null,
-              nodeCount: parseResult.canvas.nodes.length,
-              edgeCount: parseResult.canvas.edges.length,
+              diagramType: parseResult.canvas.diagramType,
+              nodeCount,
+              edgeCount,
               sessionId,
               ...(parseResult.errors.length > 0 ? { warnings: parseResult.errors } : {}),
             }),

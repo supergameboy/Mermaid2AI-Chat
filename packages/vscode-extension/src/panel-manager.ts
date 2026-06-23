@@ -9,18 +9,23 @@
  * - 转发 views_update / active_view_update / 扩展 reconnect_sync
  * - 转发 switch_view / create_view / close_view / rename_view / reorder_views
  * - WebSocket URL 携带 workspaceRoot 参数
+ *
+ * 多图表类型：
+ * - PanelState.activeCanvas 为唯一真相源（CanvasState 联合类型）
+ * - nodes/edges/direction 为图结构类型的派生字段
  */
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { WsClient, type WsServerMessage, type WsClientMessage, type ConnectionStatus, type CanvasPayload, type ViewportPayload, type ActiveViewPayload, type ViewsUpdatePayload, type ReconnectSyncPayload } from './ws-client.js';
-import type { MermaidEdge, MermaidNode, FlowchartDirection, CanvasSource, Viewport, ViewSummary } from '@mermaid2aichat/serializer';
+import { WsClient, type WsServerMessage, type WsClientMessage, type ConnectionStatus, type ViewportPayload, type ActiveViewPayload, type ViewsUpdatePayload, type ReconnectSyncPayload } from './ws-client.js';
+import type { CanvasState, CanvasSource, FlowchartDirection, MermaidEdge, MermaidNode, Viewport, ViewSummary } from '@mermaid2aichat/serializer';
+import { isGraphCanvasState, migrateCanvasState } from '@mermaid2aichat/serializer';
 
 // === Webview ↔ Extension 消息类型 ===
 
 /** Webview → Extension */
 interface WebviewMessage {
-  type: 'canvas_edit' | 'reset_consumed' | 'viewport_edit' | 'switch_view' | 'create_view' | 'close_view' | 'rename_view' | 'reorder_views' | 'ready';
+  type: 'canvas_edit' | 'canvas_update' | 'reset_consumed' | 'viewport_edit' | 'switch_view' | 'create_view' | 'close_view' | 'rename_view' | 'reorder_views' | 'ready';
   payload?: unknown;
   viewId?: string;
   title?: string;
@@ -39,7 +44,9 @@ interface PanelState {
   // 视图列表
   views: ViewSummary[];
   activeViewId: string | null;
-  // 活动视图内容
+  // 活动视图内容（activeCanvas 为唯一真相源）
+  activeCanvas: CanvasState;
+  // 图结构类型派生字段（仅当 activeCanvas 为 GraphCanvasState 时有效）
   nodes: MermaidNode[];
   edges: MermaidEdge[];
   direction: FlowchartDirection;
@@ -51,9 +58,30 @@ interface PanelState {
   connectionStatus: ConnectionStatus;
 }
 
+/** 从 CanvasState 派生图结构字段 */
+function deriveGraphFields(canvas: CanvasState): {
+  nodes: MermaidNode[];
+  edges: MermaidEdge[];
+  direction: FlowchartDirection;
+} {
+  if (isGraphCanvasState(canvas)) {
+    return {
+      nodes: canvas.nodes,
+      edges: canvas.edges,
+      direction: canvas.direction ?? 'TD',
+    };
+  }
+  return { nodes: [], edges: [], direction: 'TD' };
+}
+
+function createDefaultCanvas(): CanvasState {
+  return { diagramType: 'flowchart', nodes: [], edges: [], direction: 'TD' };
+}
+
 const initialState: PanelState = {
   views: [],
   activeViewId: null,
+  activeCanvas: createDefaultCanvas(),
   nodes: [],
   edges: [],
   direction: 'TD',
@@ -100,11 +128,14 @@ export class PanelManager {
   private handleServerMessage(msg: WsServerMessage): void {
     switch (msg.type) {
       case 'canvas_update': {
-        const payload = msg.payload;
-        this.state.nodes = payload.nodes;
-        this.state.edges = payload.edges;
-        this.state.direction = payload.direction;
-        this.postMessage({ type: 'canvas_update', payload });
+        // 服务端画布更新（联合类型 CanvasState）
+        const canvas = migrateCanvasState(msg.payload);
+        this.state.activeCanvas = canvas;
+        const derived = deriveGraphFields(canvas);
+        this.state.nodes = derived.nodes;
+        this.state.edges = derived.edges;
+        this.state.direction = derived.direction;
+        this.postMessage({ type: 'canvas_update', payload: canvas });
         break;
       }
       case 'consumed_update': {
@@ -131,9 +162,12 @@ export class PanelManager {
       case 'active_view_update': {
         const payload: ActiveViewPayload = msg.payload;
         this.state.activeViewId = payload.viewId;
-        this.state.nodes = payload.canvas.nodes;
-        this.state.edges = payload.canvas.edges;
-        this.state.direction = payload.canvas.direction;
+        const migrated = migrateCanvasState(payload.canvas);
+        this.state.activeCanvas = migrated;
+        const derived = deriveGraphFields(migrated);
+        this.state.nodes = derived.nodes;
+        this.state.edges = derived.edges;
+        this.state.direction = derived.direction;
         this.state.consumed = payload.consumed.consumed;
         this.state.lastConsumedAt = payload.consumed.lastConsumedAt;
         this.state.canvasSource = payload.consumed.canvasSource;
@@ -150,9 +184,12 @@ export class PanelManager {
         this.state.activeViewId = payload.activeViewId;
         if (payload.activeView) {
           const av = payload.activeView;
-          this.state.nodes = av.canvas.nodes;
-          this.state.edges = av.canvas.edges;
-          this.state.direction = av.canvas.direction;
+          const migrated = migrateCanvasState(av.canvas);
+          this.state.activeCanvas = migrated;
+          const derived = deriveGraphFields(migrated);
+          this.state.nodes = derived.nodes;
+          this.state.edges = derived.edges;
+          this.state.direction = derived.direction;
           this.state.consumed = av.consumed.consumed;
           this.state.lastConsumedAt = av.consumed.lastConsumedAt;
           this.state.canvasSource = av.consumed.canvasSource;
@@ -229,7 +266,9 @@ export class PanelManager {
     let wsMsg: WsClientMessage;
     switch (msg.type) {
       case 'canvas_edit':
-        wsMsg = { type: 'canvas_edit', payload: msg.payload as CanvasPayload };
+      case 'canvas_update':
+        // canvas_edit（图结构类型）和 canvas_update（数据图表类型）都发送 CanvasState
+        wsMsg = { type: 'canvas_edit', payload: msg.payload as CanvasState };
         break;
       case 'reset_consumed':
         wsMsg = { type: 'reset_consumed' };
@@ -258,7 +297,7 @@ export class PanelManager {
 
   /** 发送当前完整状态给 Webview（面板打开时） */
   private sendCurrentState(): void {
-    // 发送视图列表
+    // 发送视图列表 + 活动视图完整内容（含 activeCanvas）
     this.postMessage({
       type: 'reconnect_sync',
       payload: {
@@ -266,11 +305,7 @@ export class PanelManager {
         activeViewId: this.state.activeViewId,
         activeView: this.state.activeViewId ? {
           viewId: this.state.activeViewId,
-          canvas: {
-            nodes: this.state.nodes,
-            edges: this.state.edges,
-            direction: this.state.direction,
-          },
+          canvas: this.state.activeCanvas,
           consumed: {
             consumed: this.state.consumed,
             lastConsumedAt: this.state.lastConsumedAt,

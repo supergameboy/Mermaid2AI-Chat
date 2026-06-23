@@ -17,6 +17,7 @@ import type {
   ViewSummary,
   View,
 } from '@mermaid2aichat/serializer';
+import { migrateCanvasState } from '@mermaid2aichat/serializer';
 
 /** 持久化状态快照 */
 export interface PersistState {
@@ -154,7 +155,7 @@ export function createPersistenceService(viewsDir: string): PersistenceService {
           return { views: [], activeViewId: null, activeContent: null };
         }
 
-        // 分离元数据和内容
+        // 分离元数据和内容（迁移旧版无 diagramType 的 ViewSummary）
         const views: ViewSummary[] = data.views.map((v) => ({
           id: v.id,
           title: v.title,
@@ -162,13 +163,14 @@ export function createPersistenceService(viewsDir: string): PersistenceService {
           updatedAt: v.updatedAt,
           sessionId: v.sessionId,
           source: v.source,
+          diagramType: v.diagramType ?? 'flowchart',
         }));
 
         const activeViewId = data.activeViewId ?? views[0].id;
         const activeView = data.views.find((v) => v.id === activeViewId) ?? data.views[0];
 
         const activeContent: ViewContentOnDisk = {
-          canvas: activeView.canvas,
+          canvas: migrateCanvasState(activeView.canvas),
           consumed: activeView.consumed,
           viewport: activeView.viewport,
         };
@@ -235,7 +237,7 @@ export function createPersistenceService(viewsDir: string): PersistenceService {
         }
         return {
           ...v,
-          canvas: { nodes: [], edges: [], direction: 'TD' },
+          canvas: { diagramType: 'flowchart', nodes: [], edges: [], direction: 'TD' },
           consumed: { consumed: false, lastConsumedAt: null, canvasSource: null },
           viewport: { x: 0, y: 0, zoom: 1 },
         };
@@ -254,7 +256,12 @@ export function createPersistenceService(viewsDir: string): PersistenceService {
       try {
         const contentPath = getViewContentPath(viewId);
         const content = await fs.promises.readFile(contentPath, 'utf-8');
-        return JSON.parse(content) as ViewContentOnDisk;
+        const parsed = JSON.parse(content) as ViewContentOnDisk;
+        // 迁移旧版无 diagramType 的 canvas
+        return {
+          ...parsed,
+          canvas: migrateCanvasState(parsed.canvas),
+        };
       } catch {
         // 文件不存在 → 返回 null（可能是活动视图，内容在 views.json 中）
         return null;

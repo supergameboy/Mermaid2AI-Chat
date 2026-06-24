@@ -105,7 +105,7 @@ export function applyIncrementalChanges(
 ): string | null {
   if (!previousCanvas) return null;
 
-  const lines = rawCode.split('\n');
+  let lines = rawCode.split('\n');
   let modified = false;
 
   // Bug8: 方向变更优先处理，不受 isIncrementalChange 限制
@@ -146,9 +146,31 @@ export function applyIncrementalChanges(
   const removedNodes = previousCanvas.nodes.filter(
     (n) => !canvas.nodes.some((c) => c.id === n.id),
   );
+  // 子图删除时需要删除整块 subgraph ... end，此处先收集被删除的子图块范围
+  const subgraphBlockRanges: Array<{ start: number; end: number }> = [];
   for (const node of removedNodes) {
+    const isSubgraph = readField<boolean>(node.data, 'isSubgraph');
     const sourceLine = readField<number>(node.data, '_sourceLine');
+    if (isSubgraph) {
+      // Bug7 修复：_sourceLine 在连续增量编辑后可能过时，优先通过 ID 在当前 rawCode 中定位 subgraph 定义行
+      const currentLine = findSubgraphDefinitionLine(lines, node.id) ?? sourceLine;
+      if (currentLine !== undefined && currentLine >= 0 && currentLine < lines.length) {
+        const blockRange = findSubgraphBlockRange(lines, currentLine);
+        if (blockRange !== null) {
+          subgraphBlockRanges.push(blockRange);
+          for (let i = blockRange.start; i <= blockRange.end; i++) {
+            linesToDelete.add(i);
+          }
+          modified = true;
+          continue;
+        }
+      }
+    }
     if (sourceLine !== undefined && sourceLine >= 0 && sourceLine < lines.length) {
+      // 若该节点行已落在某个待删除的子图块内，无需重复添加
+      if (subgraphBlockRanges.some((r) => sourceLine >= r.start && sourceLine <= r.end)) {
+        continue;
+      }
       linesToDelete.add(sourceLine);
       modified = true;
     }
@@ -156,6 +178,10 @@ export function applyIncrementalChanges(
     const styleLinePattern = new RegExp(`^\\s*style\\s+${escapeRegExp(node.id)}\\b`);
     for (let i = lines.length - 1; i >= 0; i--) {
       if (styleLinePattern.test(lines[i])) {
+        // 避免删除已落在子图块内的 style 行（块删除已覆盖）
+        if (subgraphBlockRanges.some((r) => i >= r.start && i <= r.end)) {
+          break;
+        }
         linesToDelete.add(i);
         modified = true;
         break;
@@ -173,39 +199,105 @@ export function applyIncrementalChanges(
     modified = true;
   }
 
-  // Bug7: 处理边删除 — 收集待删除行号
+  // Bug9: 处理边删除 — 收集待删除行号，同时保留行内幸存的顶点定义
   const removedEdges = previousCanvas.edges.filter(
     (e) => !canvas.edges.some((c) => c.id === e.id),
   );
+  const removedNodeIds = new Set(removedNodes.map((n) => n.id));
+  // 边行替换：原行被删除，但行内若包含仍存在的顶点定义，需要保留这些顶点
+  const lineReplacements = new Map<number, Array<{ nodeId: string; code: string }>>();
   for (const edge of removedEdges) {
     const sourceLine = readField<number>(edge.data, '_sourceLine');
-    if (sourceLine !== undefined && sourceLine >= 0 && sourceLine < lines.length) {
+    if (sourceLine === undefined || sourceLine < 0 || sourceLine >= lines.length) {
+      continue;
+    }
+    // 若该行已落在被删除的子图块内，整行由子图块删除逻辑处理，不再保留顶点
+    if (subgraphBlockRanges.some((r) => sourceLine >= r.start && sourceLine <= r.end)) {
+      linesToDelete.add(sourceLine);
+      modified = true;
+      continue;
+    }
+
+    const line = lines[sourceLine];
+    const vertexIds = extractVertexDefinitionIds(line);
+    const replacements: Array<{ nodeId: string; code: string }> = [];
+    for (const nodeId of vertexIds) {
+      // 节点本身被删除，其定义无需保留
+      if (removedNodeIds.has(nodeId)) continue;
+      const node = canvas.nodes.find((n) => n.id === nodeId);
+      if (!node) continue;
+      const nodeSourceLine = readField<number>(node.data, '_sourceLine');
+      // 该行为节点定义行的条件：
+      // 1. 解析器已记录 _sourceLine 指向本行；或
+      // 2. 解析器未记录（目标端顶点通常如此），但行内确实包含该节点顶点定义
+      const isDefinitionLine =
+        nodeSourceLine === sourceLine ||
+        (nodeSourceLine === undefined && lineContainsVertexDefinition(line, nodeId));
+      if (!isDefinitionLine) continue;
+      replacements.push({ nodeId, code: serializeVertex(node) });
+    }
+
+    if (replacements.length > 0) {
+      lineReplacements.set(sourceLine, replacements);
+      modified = true;
+    } else {
       linesToDelete.add(sourceLine);
       modified = true;
     }
   }
 
-  // Bug7: 统一按降序删除行，避免行号偏移导致后续删除定位错误
-  // 从后向前删除，前面的行号不受影响
-  const sortedDeletions = Array.from(linesToDelete).sort((a, b) => b - a);
-  for (const lineIdx of sortedDeletions) {
-    if (lineIdx < lines.length) {
-      lines.splice(lineIdx, 1);
+  // Bug7+Bug9: 应用行替换与删除，构建新的 lines 数组，并维护旧行号→新行号映射
+  const sortedDeletions = Array.from(linesToDelete).sort((a, b) => a - b);
+  const newLines: string[] = [];
+  const oldLineToNewLine = new Map<number, number>();
+  let insertedSoFar = 0;
+  function deletedBefore(index: number): number {
+    return sortedDeletions.filter((d) => d < index).length;
+  }
+  for (let i = 0; i < lines.length; i++) {
+    const replacements = lineReplacements.get(i);
+    if (replacements) {
+      const newIndex = i - deletedBefore(i) + insertedSoFar;
+      for (const { code } of replacements) {
+        newLines.push(code);
+      }
+      oldLineToNewLine.set(i, newIndex);
+      insertedSoFar += replacements.length - 1;
+    } else if (linesToDelete.has(i)) {
+      // 删除整行
+    } else {
+      newLines.push(lines[i]);
+      oldLineToNewLine.set(i, i - deletedBefore(i) + insertedSoFar);
     }
   }
+  lines = newLines;
 
-  // Bug7: 计算行号偏移映射 — 删除行后，_sourceLine 需要调整
-  // sortedDeletions 是降序排列的已删除行号，需要转为升序来计算偏移
-  const deletionAsc = Array.from(linesToDelete).sort((a, b) => a - b);
-  /** 将原始 _sourceLine 转换为删除行后的实际行号 */
-  function getActualLine(originalLine: number): number {
-    let actual = originalLine;
-    for (const deleted of deletionAsc) {
-      if (originalLine > deleted) {
-        actual--;
+  // Bug9: 更新被保留顶点的 _sourceLine，使后续增量序列化仍能定位
+  let updatedCanvasNodes: MermaidNode[] | undefined;
+  for (const [oldLine, replacements] of lineReplacements) {
+    const baseNewLine = oldLineToNewLine.get(oldLine);
+    if (baseNewLine === undefined) continue;
+    for (let r = 0; r < replacements.length; r++) {
+      const { nodeId } = replacements[r];
+      const nodeIndex = canvas.nodes.findIndex((n) => n.id === nodeId);
+      if (nodeIndex < 0) continue;
+      if (!updatedCanvasNodes) {
+        updatedCanvasNodes = [...canvas.nodes];
       }
+      const node = updatedCanvasNodes[nodeIndex];
+      updatedCanvasNodes[nodeIndex] = {
+        ...node,
+        data: { ...node.data, _sourceLine: baseNewLine + r },
+      };
     }
-    return actual;
+  }
+  if (updatedCanvasNodes) {
+    canvas.nodes = updatedCanvasNodes;
+  }
+
+  /** 将原始 _sourceLine 转换为行替换/删除后的实际行号 */
+  function getActualLine(originalLine: number): number | undefined {
+    return oldLineToNewLine.get(originalLine);
   }
 
   // 若有结构级变更且无法完全增量处理（如 subgraph 归属变更），回退全量
@@ -283,7 +375,9 @@ export function applyIncrementalChanges(
 
     // Bug7: 使用偏移映射获取实际行号
     const actualLine = getActualLine(sourceLine);
-    if (actualLine < 0 || actualLine >= lines.length) return null; // 行号越界 → 回退全量
+    if (actualLine === undefined || actualLine < 0 || actualLine >= lines.length) {
+      return null; // 行号无法映射或越界 → 回退全量
+    }
 
     const newVertexCode = serializeVertex(node);
     const oldLine = lines[actualLine];
@@ -307,7 +401,9 @@ export function applyIncrementalChanges(
 
     // Bug7: 使用偏移映射获取实际行号
     const actualLine = getActualLine(sourceLine);
-    if (actualLine < 0 || actualLine >= lines.length) return null;
+    if (actualLine === undefined || actualLine < 0 || actualLine >= lines.length) {
+      return null;
+    }
 
     const newEdgeCode = serializeEdge(edge);
     const oldLine = lines[actualLine];
@@ -355,6 +451,39 @@ function findFlowchartDirectionLine(lines: string[]): { index: number; keyword: 
 // ============================================================
 // 内部实现
 // ============================================================
+
+// Bug9: 辅助函数 — 从边定义行中提取需要保留的顶点定义
+// ============================================================
+
+/** 顶点定义起始字符（id 后跟这些字符表示一个顶点定义） */
+const VERTEX_START_CHARS = '[\\[\\(\\{\\<\\@\\|]';
+
+/**
+ * 从一行代码中提取所有顶点定义的节点 ID
+ *
+ * 匹配模式：id 后紧跟形状起始符（如 `[`、`(`、`{`、`<`、`@`、`|`）
+ * 例如 `A[Hello] --> B{World}` → ['A', 'B']
+ */
+function extractVertexDefinitionIds(line: string): string[] {
+  const pattern = new RegExp(`(^|\\s)([A-Za-z0-9_]+)(${VERTEX_START_CHARS})`, 'g');
+  const ids: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(line)) !== null) {
+    const id = match[2];
+    if (id) {
+      ids.push(id);
+    }
+  }
+  return ids;
+}
+
+/**
+ * 判断某行中是否包含指定节点的顶点定义
+ */
+function lineContainsVertexDefinition(line: string, nodeId: string): boolean {
+  const pattern = new RegExp(`(^|\\s)${escapeRegExp(nodeId)}${VERTEX_START_CHARS}`);
+  return pattern.test(line);
+}
 
 /** 判断节点属性是否变更（label/shape/style/props 等） */
 function hasNodePropertyChanged(node: MermaidNode, prevNode: MermaidNode): boolean {
@@ -563,6 +692,59 @@ function findMatchingBrace(line: string, startPos: number, open: string, close: 
     }
   }
   return -1;
+}
+
+/**
+ * 在当前 rawCode 中通过 subgraph ID 定位其定义行
+ *
+ * 用于 _sourceLine 过时场景（连续增量编辑后行号偏移），
+ * 通过稳定不变的节点 ID 搜索 `subgraph id[Title]` / `subgraph id` 定义行。
+ *
+ * @param lines - 代码行数组
+ * @param id - subgraph 节点 ID
+ * @returns 定义行行索引（0-based），未找到返回 undefined
+ */
+function findSubgraphDefinitionLine(lines: string[], id: string): number | undefined {
+  const pattern = new RegExp(`^\\s*subgraph\\s+${escapeRegExp(id)}\\b`);
+  for (let i = 0; i < lines.length; i++) {
+    if (pattern.test(lines[i])) {
+      return i;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * 查找 subgraph 代码块范围（含嵌套 subgraph）
+ *
+ * 从 subgraph 定义行开始，向后扫描，遇到 `subgraph` 关键字深度 +1，
+ * 遇到 `end` 关键字深度 -1，深度归零时即为匹配 end 行。
+ *
+ * @param lines - 代码行数组
+ * @param startLine - subgraph 定义行索引（0-based）
+ * @returns 块范围 { start, end }，未找到返回 null
+ */
+function findSubgraphBlockRange(
+  lines: string[],
+  startLine: number,
+): { start: number; end: number } | null {
+  if (startLine < 0 || startLine >= lines.length) return null;
+  const startLineTrimmed = lines[startLine]?.trim() ?? '';
+  if (!startLineTrimmed.match(/^subgraph\b/)) return null;
+
+  let depth = 0;
+  for (let i = startLine; i < lines.length; i++) {
+    const trimmed = lines[i]?.trim() ?? '';
+    if (trimmed.match(/^subgraph\b/)) {
+      depth++;
+    } else if (trimmed.match(/^end\b/)) {
+      depth--;
+      if (depth === 0) {
+        return { start: startLine, end: i };
+      }
+    }
+  }
+  return null;
 }
 
 /** 转义正则表达式特殊字符 */

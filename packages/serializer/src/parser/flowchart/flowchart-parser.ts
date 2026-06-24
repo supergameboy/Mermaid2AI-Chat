@@ -331,6 +331,9 @@ function getEdgeMarkers(
 /**
  * 将 style 语句的字符串数组解析为结构化 NodeStyle 对象
  * style 语句格式: "fill:#e1f5fe", "stroke:#333", "stroke-width:2", "color:#fff"
+ *
+ * Bug5 修复：不再过滤非 fill/stroke/stroke-width/color 属性，将所有 key:value 对保留，
+ * 确保 classDef / inline style 的任意 CSS 属性在解析-渲染-序列化往返中不丢失。
  */
 function parseStylesToNodeStyle(styles: string[]): NodeStyle | undefined {
   if (styles.length === 0) return undefined;
@@ -349,12 +352,27 @@ function parseStylesToNodeStyle(styles: string[]): NodeStyle | undefined {
         break;
       case 'stroke-width':
       case 'strokeWidth': {
-        const w = Number(value);
-        if (Number.isFinite(w)) result.strokeWidth = w;
+        const num = Number(value);
+        if (Number.isFinite(num)) {
+          result.strokeWidth = num;
+        } else {
+          // 带单位的值（如 2px）保留原始字符串
+          // key 在此上下文中为 'stroke-width' | 'strokeWidth'，通过索引签名写入
+          (result as Record<string, string | number | undefined>)[key] = value;
+          // 同时尝试提供数值给渲染层
+          const loose = Number(value.replace(/[^0-9.]/g, ''));
+          if (Number.isFinite(loose)) {
+            result.strokeWidth = loose;
+          }
+        }
         break;
       }
       case 'color':
         result.color = value;
+        break;
+      default:
+        // 保留所有其他 CSS 属性
+        result[key] = value;
         break;
     }
   }

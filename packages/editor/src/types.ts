@@ -22,6 +22,8 @@ export interface CanvasSnapshot {
   direction: FlowchartDirection;
   /** architecture 等类型的元数据（如 groups） */
   metadata?: GraphMetadata;
+  /** 原始 Mermaid 代码（用于增量序列化保留格式） */
+  rawCode?: string;
 }
 
 /**

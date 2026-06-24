@@ -356,6 +356,46 @@ describe('样式系统往返', () => {
     const defaultInterpolate = (second.metadata as Record<string, unknown> | undefined)?.flowDefaultInterpolate;
     expect(defaultInterpolate).toBe('basis');
   });
+
+  it('应保持 style 中任意 CSS 属性（如 font-size、font-family）', () => {
+    const code = `flowchart TD
+    A[Hello]
+    style A fill:#f00,stroke:#900,font-size:12px,font-family:Arial`;
+
+    const { first, second } = roundTrip(code);
+    assertSemanticEqual(first, second);
+
+    const nodeA = second.nodes.find((n) => n.id === 'A');
+    const styles = (nodeA?.data as Record<string, unknown>).styles as string[] | undefined;
+    expect(styles).toBeDefined();
+    expect(styles).toContain('font-size:12px');
+    expect(styles).toContain('font-family:Arial');
+
+    const style = (nodeA?.data as Record<string, unknown>).style as Record<string, unknown> | undefined;
+    expect(style).toBeDefined();
+    expect(style?.['font-size']).toBe('12px');
+    expect(style?.['font-family']).toBe('Arial');
+  });
+
+  it('应保持 classDef 中任意 CSS 属性（如 font-size、font-family）', () => {
+    const code = `flowchart TD
+    A[Hello]:::red
+    classDef red fill:#f00,font-size:14px,font-family:Arial`;
+
+    const { first, second } = roundTrip(code);
+    assertSemanticEqual(first, second);
+
+    const redClass = second.metadata?.flowClassDefs?.find((c) => c.id === 'red');
+    expect(redClass).toBeDefined();
+    expect(redClass?.styles).toContain('font-size:14px');
+    expect(redClass?.styles).toContain('font-family:Arial');
+
+    const nodeA = second.nodes.find((n) => n.id === 'A');
+    const style = (nodeA?.data as Record<string, unknown>).style as Record<string, unknown> | undefined;
+    expect(style).toBeDefined();
+    expect(style?.['font-size']).toBe('14px');
+    expect(style?.['font-family']).toBe('Arial');
+  });
 });
 
 // ============================================================

@@ -31,6 +31,10 @@ export interface ContextMenuProps {
   onCreateSubgraphWithSelected: () => void;
   /** 切换选中节点形状（有选中节点时） */
   onSwitchShape?: (shape: MermaidShapeType) => void;
+  /** 删除选中的普通节点 */
+  onDeleteNode?: () => void;
+  /** 删除当前子图节点 */
+  onDeleteSubgraph?: () => void;
   /** 关闭菜单 */
   onClose: () => void;
 }
@@ -59,12 +63,21 @@ export const ContextMenu = memo(function ContextMenu({
   onCreateSubgraph,
   onCreateSubgraphWithSelected,
   onSwitchShape,
+  onDeleteNode,
+  onDeleteSubgraph,
   onClose,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const hasSelection = selectedNodeIds.length > 0;
+  const canDeleteNode = hasSelection && onDeleteNode !== undefined;
+  const canDeleteSubgraph = onDeleteSubgraph !== undefined;
 
-  // 点击外部关闭菜单
+  // 菜单打开时自动聚焦，支持失焦关闭
+  useEffect(() => {
+    menuRef.current?.focus();
+  }, []);
+
+  // 点击外部 / 按 Escape 关闭菜单
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -82,6 +95,12 @@ export const ContextMenu = memo(function ContextMenu({
     };
   }, [onClose]);
 
+  const handleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    if (!menuRef.current?.contains(e.relatedTarget as Node)) {
+      onClose();
+    }
+  };
+
   const handleCreateSubgraph = () => {
     if (hasSelection) {
       onCreateSubgraphWithSelected();
@@ -96,9 +115,21 @@ export const ContextMenu = memo(function ContextMenu({
     onClose();
   };
 
+  const handleDeleteNode = () => {
+    onDeleteNode?.();
+    onClose();
+  };
+
+  const handleDeleteSubgraph = () => {
+    onDeleteSubgraph?.();
+    onClose();
+  };
+
   return (
     <div
       ref={menuRef}
+      tabIndex={-1}
+      onBlur={handleBlur}
       className="context-menu"
       style={{
         position: 'fixed',
@@ -112,6 +143,7 @@ export const ContextMenu = memo(function ContextMenu({
         zIndex: 1000,
         padding: '4px 0',
         fontSize: '13px',
+        outline: 'none',
       }}
     >
       {/* 创建 Subgraph */}
@@ -133,6 +165,53 @@ export const ContextMenu = memo(function ContextMenu({
       >
         {hasSelection ? `创建子图 (含 ${selectedNodeIds.length} 个节点)` : '创建子图'}
       </button>
+
+      {/* 分隔线 + 删除选项 */}
+      {(canDeleteNode || canDeleteSubgraph) && (
+        <>
+          <div style={{ height: '1px', backgroundColor: '#e8e8e8', margin: '4px 0' }} />
+          {canDeleteSubgraph && (
+            <button
+              onClick={handleDeleteSubgraph}
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '6px 16px',
+                border: 'none',
+                backgroundColor: 'transparent',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: '#ff4d4f',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#fff1f0'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+            >
+              删除子图
+            </button>
+          )}
+          {canDeleteNode && (
+            <button
+              onClick={handleDeleteNode}
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '6px 16px',
+                border: 'none',
+                backgroundColor: 'transparent',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: '#ff4d4f',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#fff1f0'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+            >
+              {selectedNodeIds.length > 1 ? `删除 ${selectedNodeIds.length} 个节点` : '删除节点'}
+            </button>
+          )}
+        </>
+      )}
 
       {/* 分隔线 */}
       {hasSelection && onSwitchShape && (

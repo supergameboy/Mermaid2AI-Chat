@@ -23,6 +23,8 @@ interface CanvasSnapshot {
   nodes: MermaidNode[];
   edges: MermaidEdge[];
   direction: FlowchartDirection;
+  /** 原始 Mermaid 代码（用于增量序列化保留格式） */
+  rawCode?: string;
 }
 
 interface ConsumedPayload {
@@ -197,6 +199,12 @@ export function useWebSocket(url: string = 'ws://localhost:14514/ws') {
       nodes: snapshot.nodes,
       edges: snapshot.edges,
       direction: snapshot.direction,
+      // rawCode 优先来自 canvas 参数（GraphCanvas 的 getCanvasSnapshot），否则回退到 activeCanvas
+      ...(snapshot.rawCode !== undefined
+        ? { rawCode: snapshot.rawCode }
+        : activeCanvas.rawCode !== undefined
+          ? { rawCode: activeCanvas.rawCode }
+          : {}),
     };
     const msg: WsClientMessage = { type: 'canvas_edit', payload: fullCanvas };
     wsRef.current.send(JSON.stringify(msg));

@@ -379,6 +379,8 @@ export function createEditorStore() {
         edges: canvas.edges ?? currentCanvas.edges,
         direction: canvas.direction ?? currentCanvas.direction,
         metadata: canvas.metadata ?? currentCanvas.metadata,
+        // 仅当 payload 显式携带 rawCode 时更新，避免误清空已有原始代码
+        ...(canvas.rawCode !== undefined ? { rawCode: canvas.rawCode } : {}),
       };
 
       // 更新活动视图的 updatedAt
@@ -414,9 +416,17 @@ export function createEditorStore() {
           : v
       );
 
+      const newCanvas = {
+        ...canvas,
+        // 全量替换时若 payload 未提供 rawCode，保留当前值以避免误清空
+        ...(canvas.rawCode === undefined && currentCanvas.rawCode !== undefined
+          ? { rawCode: currentCanvas.rawCode }
+          : {}),
+      };
+
       set({
         views: newViews,
-        activeCanvas: canvas,
+        activeCanvas: newCanvas,
       });
     },
 

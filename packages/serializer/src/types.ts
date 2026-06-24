@@ -317,6 +317,8 @@ export interface NodeStyle {
   stroke?: string;
   strokeWidth?: number;
   color?: string;
+  /** 其他任意 CSS 属性（保留 Mermaid 原始 style/classDef 中的所有属性） */
+  [key: string]: string | number | undefined;
 }
 
 /** 边标记（与 React Flow EdgeMarker 兼容） */
@@ -618,6 +620,12 @@ export interface MermaidEdgeData {
   archEdge?: ArchitectureEdgeInfo;
   /** 通用: classDef 应用的 CSS 类名列表 */
   classNames?: string[];
+  /** flowchart: 是否为回路边 */
+  isBackEdge?: boolean;
+  /** flowchart: 布局阶段计算的 source 连接方向 */
+  sourcePosition?: 'top' | 'bottom' | 'left' | 'right';
+  /** flowchart: 布局阶段计算的 target 连接方向 */
+  targetPosition?: 'top' | 'bottom' | 'left' | 'right';
   [key: string]: unknown;
 }
 
@@ -951,6 +959,8 @@ export interface GraphCanvasUpdate {
   edges?: MermaidEdge[];
   direction?: FlowchartDirection;
   metadata?: GraphMetadata;
+  /** 原始 Mermaid 代码（用于增量序列化保留格式） */
+  rawCode?: string;
 }
 
 // ============================================================

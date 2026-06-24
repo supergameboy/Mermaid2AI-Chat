@@ -40,10 +40,10 @@ export const SUBGRAPH_MIN_WIDTH = 200;
 export const SUBGRAPH_MIN_HEIGHT = 100;
 /** 标题栏高度，需与 subgraph-node.tsx 保持一致 */
 export const SUBGRAPH_TITLE_HEIGHT = 28;
-/** 子图内容区水平内边距（dagre 已含内部 padding，这里额外留边） */
-export const SUBGRAPH_HORIZONTAL_PADDING = 16;
-/** 子图内容区底部垂直内边距 */
-const SUBGRAPH_VERTICAL_PADDING = 16;
+/** 子图内容区水平内边距，与 dagre 布局后左右间距一致（实测约 NODE_SEP * 0.75） */
+export const SUBGRAPH_HORIZONTAL_PADDING = 45;
+/** 子图内容区垂直内边距，与 dagre 布局后上下间距一致（实测约 RANK_SEP/2） */
+const SUBGRAPH_VERTICAL_PADDING = 60;
 
 // ============================================================
 // 布局函数
@@ -104,10 +104,10 @@ export function layoutWithDagre(
   // 计算布局
   dagre.layout(g);
 
-  // 1. 收集 dagre 输出的绝对位置（节点中心 → 左上角）
+  // 1. 收集 dagre 输出的绝对位置（节点中心 → 左上角）和尺寸
   // Bug2 修复：对 subgraph 节点使用 dagre 输出尺寸（dagre compound 模式会自动扩展父节点尺寸以包含所有子节点），
   // 而非输入尺寸（默认 300x200），确保一次布局即得到正确的子节点相对位置和 subgraph 包围盒
-  const absolutePositions = new Map<string, { x: number; y: number }>();
+  const absolutePositions = new Map<string, { x: number; y: number; width: number; height: number }>();
   for (const node of nodes) {
     const dagreNode = g.node(node.id);
     if (!dagreNode) continue;
@@ -118,6 +118,8 @@ export function layoutWithDagre(
     absolutePositions.set(node.id, {
       x: dagreNode.x - width / 2,
       y: dagreNode.y - height / 2,
+      width,
+      height,
     });
   }
 
@@ -206,7 +208,7 @@ export function layoutWithDagre(
     );
     const height = Math.max(
       SUBGRAPH_MIN_HEIGHT,
-      contentHeight + SUBGRAPH_VERTICAL_PADDING + SUBGRAPH_TITLE_HEIGHT,
+      contentHeight + SUBGRAPH_VERTICAL_PADDING * 2 + SUBGRAPH_TITLE_HEIGHT,
       dagreNode.height + SUBGRAPH_TITLE_HEIGHT,
     );
 
@@ -233,13 +235,64 @@ export function layoutWithDagre(
     };
   });
 
-  // 自环边标记（在 edge.data 上标记 isSelfLoop，渲染器据此绘制绕圈路径）
+  // 自环边标记 + 回路边标记
   const newEdges = edges.map((edge) => {
-    if (!selfLoopEdgeIds.has(edge.id)) return edge;
-    return {
-      ...edge,
-      data: { ...edge.data, isSelfLoop: true },
-    };
+    const dataUpdates: Record<string, unknown> = {};
+
+    // 自环边标记（在 edge.data 上标记 isSelfLoop，渲染器据此绘制绕圈路径）
+    if (selfLoopEdgeIds.has(edge.id)) {
+      dataUpdates.isSelfLoop = true;
+    }
+
+    // 回路边标记：source 节点在 dagre rank 中低于 target 节点
+    // dagre 布局后通过绝对坐标判断：
+    //   TD/TB: rank 从上到下，source.y > target.y → 回路边
+    //   BT: rank 从下到上，source.y < target.y → 回路边
+    //   LR: rank 从左到右，source.x > target.x → 回路边
+    //   RL: rank 从右到左，source.x < target.x → 回路边
+    const sourceAbs = absolutePositions.get(edge.source);
+    const targetAbs = absolutePositions.get(edge.target);
+    if (sourceAbs && targetAbs && edge.source !== edge.target) {
+      let isBackEdge = false;
+      switch (direction) {
+        case 'TD':
+        case 'TB':
+          isBackEdge = sourceAbs.y > targetAbs.y;
+          break;
+        case 'BT':
+          isBackEdge = sourceAbs.y < targetAbs.y;
+          break;
+        case 'LR':
+          isBackEdge = sourceAbs.x > targetAbs.x;
+          break;
+        case 'RL':
+          isBackEdge = sourceAbs.x < targetAbs.x;
+          break;
+      }
+      if (isBackEdge) {
+        dataUpdates.isBackEdge = true;
+        // 为回路边计算几何正确的连接点方向：
+        // 根据 source/target 中心点相对位置选择连接方向，优先让边绕到节点外侧
+        const sourceCenter = {
+          x: sourceAbs.x + sourceAbs.width / 2,
+          y: sourceAbs.y + sourceAbs.height / 2,
+        };
+        const targetCenter = {
+          x: targetAbs.x + targetAbs.width / 2,
+          y: targetAbs.y + targetAbs.height / 2,
+        };
+        const { sourcePosition, targetPosition } = calculateBackEdgePositions(
+          sourceCenter,
+          targetCenter,
+          direction,
+        );
+        dataUpdates.sourcePosition = sourcePosition;
+        dataUpdates.targetPosition = targetPosition;
+      }
+    }
+
+    if (Object.keys(dataUpdates).length === 0) return edge;
+    return { ...edge, data: { ...edge.data, ...dataUpdates } };
   });
 
   return { nodes: newNodes, edges: newEdges };
@@ -248,6 +301,37 @@ export function layoutWithDagre(
 // ============================================================
 // 辅助函数
 // ============================================================
+
+/**
+ * 为回路边计算几何正确的 source/target 连接方向
+ *
+ * 基于 source/target 节点中心点相对位置判断，策略：
+ * - TD/BT（垂直布局）：回路边走水平方向（Left/Right），从节点侧面绕行
+ * - LR/RL（水平布局）：回路边走垂直方向（Top/Bottom），从节点侧面绕行
+ */
+function calculateBackEdgePositions(
+  sourceCenter: { x: number; y: number },
+  targetCenter: { x: number; y: number },
+  direction: FlowchartDirection,
+): { sourcePosition: string; targetPosition: string } {
+  switch (direction) {
+    case 'TD':
+    case 'TB':
+    case 'BT': {
+      // 垂直布局：回路边统一从右侧水平绕行，避免与正向边在中心垂直通道交叉
+      // 即使 source/target x 坐标相同也强制 right/right，禁止 fallback 到 top/bottom
+      return { sourcePosition: 'right', targetPosition: 'right' };
+    }
+    case 'LR':
+    case 'RL': {
+      // 水平布局：回路边统一从底部垂直绕行，避免与正向边在中心水平通道交叉
+      // 即使 source/target y 坐标相同也强制 bottom/bottom，禁止 fallback 到 left/right
+      return { sourcePosition: 'bottom', targetPosition: 'bottom' };
+    }
+    default:
+      return { sourcePosition: 'right', targetPosition: 'right' };
+  }
+}
 
 /** 将 FlowchartDirection 转换为 dagre rankdir */
 function toDagreRankDir(direction: FlowchartDirection): string {
@@ -333,35 +417,39 @@ function readEdgeDataField<T>(edge: MermaidEdge, key: string): T | undefined {
 // ============================================================
 
 /**
- * 根据子节点当前位置实时重算所有 subgraph 的尺寸
+ * 根据子节点当前位置实时重算所有 subgraph 的位置和尺寸
  *
  * 数据流:
- *   nodes（含子节点相对位置）→ 按 parentId 分组 → 计算包围盒 → 更新 subgraph width/height
+ *   nodes（含子节点相对位置）→ 按 parentId 分组 → 计算包围盒 → 更新 subgraph position/width/height
  *
  * 设计:
  *   - 按嵌套深度自底向上计算（最深子图先算，外层子图包含内层子图尺寸）
  *   - 只遍历直接子节点，嵌套子图的尺寸已计算完毕
  *   - 子节点位置是相对于父 subgraph 的坐标（React Flow Parent Node 机制）
+ *   - 同步调整 subgraph position 和子节点相对坐标，保持子节点视觉绝对位置不变
  *
  * @param nodes - 当前画布所有节点
- * @returns 更新了 width/height 的节点数组（仅 subgraph 节点被更新）
+ * @returns 更新了 position/width/height 的节点数组
  */
 export function recalculateSubgraphSizes(nodes: MermaidNode[]): MermaidNode[] {
   if (nodes.length === 0) return nodes;
 
-  // 构建 parentId → 直接子节点 映射
-  const childrenMap = new Map<string, MermaidNode[]>();
+  // 创建可变节点映射，用于就地更新
+  const nodeMap = new Map<string, MermaidNode>();
+  for (const node of nodes) {
+    nodeMap.set(node.id, { ...node });
+  }
+
+  // 构建 parentId → 直接子节点 ID 映射
+  const childrenMap = new Map<string, string[]>();
   for (const node of nodes) {
     if (!node.parentId) continue;
     const siblings = childrenMap.get(node.parentId) ?? [];
-    siblings.push(node);
+    siblings.push(node.id);
     childrenMap.set(node.parentId, siblings);
   }
 
   // 计算子图嵌套深度
-  const nodeMap = new Map<string, MermaidNode>();
-  for (const n of nodes) nodeMap.set(n.id, n);
-
   function getNestingDepth(nodeId: string): number {
     const node = nodeMap.get(nodeId);
     if (!node?.parentId) return 0;
@@ -372,17 +460,13 @@ export function recalculateSubgraphSizes(nodes: MermaidNode[]): MermaidNode[] {
   const subgraphNodes = nodes.filter(isSubgraph);
   subgraphNodes.sort((a, b) => getNestingDepth(b.id) - getNestingDepth(a.id));
 
-  // 存储计算后的子图尺寸
-  const subgraphSizeMap = new Map<string, { width: number; height: number }>();
-
   for (const subgraphNode of subgraphNodes) {
-    const directChildren = childrenMap.get(subgraphNode.id) ?? [];
-    if (directChildren.length === 0) {
-      // 空子图保持原尺寸
-      subgraphSizeMap.set(subgraphNode.id, {
-        width: subgraphNode.width ?? SUBGRAPH_DEFAULT_WIDTH,
-        height: subgraphNode.height ?? SUBGRAPH_DEFAULT_HEIGHT,
-      });
+    const subgraph = nodeMap.get(subgraphNode.id);
+    if (!subgraph) continue;
+
+    const childIds = childrenMap.get(subgraphNode.id) ?? [];
+    if (childIds.length === 0) {
+      // 空子图保持原尺寸和位置
       continue;
     }
 
@@ -392,38 +476,63 @@ export function recalculateSubgraphSizes(nodes: MermaidNode[]): MermaidNode[] {
     let maxX = -Infinity;
     let maxY = -Infinity;
 
-    for (const child of directChildren) {
-      const childPos = child.position;
-      // 如果子节点是子图且已有计算尺寸，使用计算尺寸；否则用 node.width/height 或默认值
-      const computedSize = subgraphSizeMap.get(child.id);
-      const childSize = computedSize ?? getNodeSize(child);
+    for (const childId of childIds) {
+      const child = nodeMap.get(childId);
+      if (!child) continue;
 
-      minX = Math.min(minX, childPos.x);
-      minY = Math.min(minY, childPos.y);
-      maxX = Math.max(maxX, childPos.x + childSize.width);
-      maxY = Math.max(maxY, childPos.y + childSize.height);
+      // 如果子节点是子图，使用已计算的尺寸；否则使用 node.width/height 或 getNodeSize
+      const childSize = isSubgraph(child)
+        ? { width: child.width ?? SUBGRAPH_DEFAULT_WIDTH, height: child.height ?? SUBGRAPH_DEFAULT_HEIGHT }
+        : getNodeSize(child);
+
+      minX = Math.min(minX, child.position.x);
+      minY = Math.min(minY, child.position.y);
+      maxX = Math.max(maxX, child.position.x + childSize.width);
+      maxY = Math.max(maxY, child.position.y + childSize.height);
     }
 
-    const contentWidth = Number.isFinite(minX) ? maxX - minX : 0;
-    const contentHeight = Number.isFinite(minY) ? maxY - minY : 0;
+    if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
+      continue;
+    }
 
+    const contentWidth = maxX - minX;
+    const contentHeight = maxY - minY;
+
+    // 计算子图原点应如何移动，使子节点包围盒紧贴内容区内边界
+    // 四周留出与 dagre 布局一致的安全距离
+    const offsetX = minX - SUBGRAPH_HORIZONTAL_PADDING;
+    const offsetY = minY - SUBGRAPH_TITLE_HEIGHT - SUBGRAPH_VERTICAL_PADDING;
+
+    // 更新子图位置（视觉绝对位置不变，子节点相对坐标同步反向调整）
+    subgraph.position = {
+      x: subgraph.position.x + offsetX,
+      y: subgraph.position.y + offsetY,
+    };
+
+    // 同步调整所有直接子节点的相对坐标
+    for (const childId of childIds) {
+      const child = nodeMap.get(childId);
+      if (!child) continue;
+      child.position = {
+        x: child.position.x - offsetX,
+        y: child.position.y - offsetY,
+      };
+    }
+
+    // 基于原始内容区尺寸重新计算子图尺寸
     const width = Math.max(
       SUBGRAPH_MIN_WIDTH,
       contentWidth + SUBGRAPH_HORIZONTAL_PADDING * 2,
     );
     const height = Math.max(
       SUBGRAPH_MIN_HEIGHT,
-      contentHeight + SUBGRAPH_VERTICAL_PADDING + SUBGRAPH_TITLE_HEIGHT,
+      contentHeight + SUBGRAPH_VERTICAL_PADDING * 2 + SUBGRAPH_TITLE_HEIGHT,
     );
 
-    subgraphSizeMap.set(subgraphNode.id, { width, height });
+    subgraph.width = width;
+    subgraph.height = height;
   }
 
-  // 更新节点数组中的 subgraph 尺寸
-  return nodes.map((node) => {
-    if (!isSubgraph(node)) return node;
-    const size = subgraphSizeMap.get(node.id);
-    if (!size) return node;
-    return { ...node, width: size.width, height: size.height };
-  });
+  // 返回更新后的节点数组
+  return nodes.map((node) => nodeMap.get(node.id) ?? node);
 }

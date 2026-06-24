@@ -121,6 +121,7 @@ class WsClientConnection {
             edges: payload.edges,
             direction: payload.direction,
             metadata: payload.metadata,
+            rawCode: payload.rawCode,
           });
         } else {
           // 数据图表类型 或 图表类型变更：全量替换 canvas

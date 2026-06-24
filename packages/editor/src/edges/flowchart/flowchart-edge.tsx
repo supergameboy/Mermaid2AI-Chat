@@ -27,8 +27,10 @@ import {
   getSmoothStepPath,
   getStraightPath,
   Position,
+  useInternalNode,
   useReactFlow,
   type EdgeProps,
+  type InternalNode,
 } from '@xyflow/react';
 import type { MermaidEdgeData, MermaidEdgeStyle } from '@mermaid2aichat/serializer';
 import { getEdgeStyleConfig, toMarkerUrl } from './edge-markers.js';
@@ -142,8 +144,57 @@ export const FlowchartEdgeComponent = memo(function FlowchartEdgeComponent({
   // 并行边偏移 — 避免多条边从同一源/到同一目标时形成8字形交叉
   // 注意：hook 必须在 early return 之前调用（Rules of Hooks）
   const { getEdges } = useReactFlow();
-  const { adjustedSourceX, adjustedSourceY, adjustedTargetX, adjustedTargetY, flippedSourcePosition, flippedTargetPosition } = useMemo(() => {
+  const sourceNode = useInternalNode(source);
+  const targetNode = useInternalNode(target);
+
+  const {
+    adjustedSourceX,
+    adjustedSourceY,
+    adjustedTargetX,
+    adjustedTargetY,
+    finalSourcePosition,
+    finalTargetPosition,
+  } = useMemo(() => {
     const allEdges = getEdges();
+
+    // 优先使用布局阶段计算的几何正确连接方向（回路边）
+    const layoutSourcePosition = readField<string>(edgeData, 'sourcePosition');
+    const layoutTargetPosition = readField<string>(edgeData, 'targetPosition');
+    const hasLayoutPosition = layoutSourcePosition !== undefined && layoutTargetPosition !== undefined;
+
+    let effectiveSourcePosition: Position = sourcePosition;
+    let effectiveTargetPosition: Position = targetPosition;
+    let effectiveSourceX = sourceX;
+    let effectiveSourceY = sourceY;
+    let effectiveTargetX = targetX;
+    let effectiveTargetY = targetY;
+
+    if (hasLayoutPosition && sourceNode && targetNode) {
+      // 使用布局阶段计算的方向，并重新计算对应边中心点坐标，确保 Position 与坐标一致
+      effectiveSourcePosition = parsePosition(layoutSourcePosition);
+      effectiveTargetPosition = parsePosition(layoutTargetPosition);
+      const sourceConnection = getConnectionPoint(sourceNode, effectiveSourcePosition);
+      const targetConnection = getConnectionPoint(targetNode, effectiveTargetPosition);
+      effectiveSourceX = sourceConnection.x;
+      effectiveSourceY = sourceConnection.y;
+      effectiveTargetX = targetConnection.x;
+      effectiveTargetY = targetConnection.y;
+    } else {
+      // 双向边检测：A→B 和 B→A 同时存在时，翻转 id 较大边的 Position
+      // 但如果反向边已被布局阶段标记为回路边并指定侧面绕行方向，
+      // 则当前正向边保持默认方向，避免与回路边形成 8 字交叉
+      const reverseEdge = allEdges.find(e =>
+        e.id !== id && e.source === target && e.target === source
+      );
+      const reverseHasLayoutPosition =
+        reverseEdge !== undefined &&
+        readField<string>(reverseEdge.data, 'sourcePosition') !== undefined &&
+        readField<string>(reverseEdge.data, 'targetPosition') !== undefined;
+      if (reverseEdge && !reverseHasLayoutPosition && id > reverseEdge.id) {
+        effectiveSourcePosition = flipPosition(sourcePosition);
+        effectiveTargetPosition = flipPosition(targetPosition);
+      }
+    }
 
     // 同源边：共享相同 source 的边，按 (target, id) 排序确保确定性
     const sameSourceEdges = allEdges
@@ -154,12 +205,6 @@ export const FlowchartEdgeComponent = memo(function FlowchartEdgeComponent({
     const sameTargetEdges = allEdges
       .filter(e => e.target === target)
       .sort((a, b) => a.source.localeCompare(b.source) || a.id.localeCompare(b.id));
-
-    // 双向边检测：A→B 和 B→A 同时存在时，形成8字形交叉
-    const reverseEdge = allEdges.find(e =>
-      e.id !== id && e.source === target && e.target === source
-    );
-    const hasReverseEdge = reverseEdge !== undefined;
 
     const PARALLEL_EDGE_SPACING = 20;
 
@@ -181,28 +226,34 @@ export const FlowchartEdgeComponent = memo(function FlowchartEdgeComponent({
       }
     }
 
-    // 双向边处理：翻转 id 较大边的 Position，使两条边弯曲方向相反
-    // 翻转后曲线从不同方向出发，避免8字形交叉
-    let finalSourcePosition = sourcePosition;
-    let finalTargetPosition = targetPosition;
-    if (hasReverseEdge && id > reverseEdge.id) {
-      finalSourcePosition = flipPosition(sourcePosition);
-      finalTargetPosition = flipPosition(targetPosition);
-    }
-
-    // 根据翻转后的连接方向应用偏移
-    const isVerticalSource = finalSourcePosition === Position.Top || finalSourcePosition === Position.Bottom;
-    const isVerticalTarget = finalTargetPosition === Position.Top || finalTargetPosition === Position.Bottom;
+    // 根据真实连接方向应用偏移
+    const isVerticalSource = effectiveSourcePosition === Position.Top || effectiveSourcePosition === Position.Bottom;
+    const isVerticalTarget = effectiveTargetPosition === Position.Top || effectiveTargetPosition === Position.Bottom;
 
     return {
-      adjustedSourceX: isVerticalSource ? sourceX + sourceOffset : sourceX,
-      adjustedSourceY: isVerticalSource ? sourceY : sourceY + sourceOffset,
-      adjustedTargetX: isVerticalTarget ? targetX + targetOffset : targetX,
-      adjustedTargetY: isVerticalTarget ? targetY : targetY + targetOffset,
-      flippedSourcePosition: finalSourcePosition,
-      flippedTargetPosition: finalTargetPosition,
+      adjustedSourceX: isVerticalSource ? effectiveSourceX + sourceOffset : effectiveSourceX,
+      adjustedSourceY: isVerticalSource ? effectiveSourceY : effectiveSourceY + sourceOffset,
+      adjustedTargetX: isVerticalTarget ? effectiveTargetX + targetOffset : effectiveTargetX,
+      adjustedTargetY: isVerticalTarget ? effectiveTargetY : effectiveTargetY + targetOffset,
+      finalSourcePosition: effectiveSourcePosition,
+      finalTargetPosition: effectiveTargetPosition,
     };
-  }, [getEdges, source, target, id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition]);
+  }, [
+    getEdges,
+    source,
+    target,
+    id,
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    edgeData?.sourcePosition,
+    edgeData?.targetPosition,
+    sourceNode,
+    targetNode,
+  ]);
 
   // 不可见线 — 仅布局占位，不渲染视觉元素
   if (config.stroke === 'invisible') {
@@ -210,17 +261,22 @@ export const FlowchartEdgeComponent = memo(function FlowchartEdgeComponent({
   }
 
   // 线型样式
-  const strokeColor = selected ? SELECTED_STROKE_COLOR : DEFAULT_STROKE_COLOR;
+  // Bug5: 优先使用 linkStyle 中定义的 stroke / stroke-width / stroke-dasharray
+  const linkStyles = readField<string[]>(edgeData, 'styles');
+  const parsedLinkStyle = parseLinkStyle(linkStyles);
+  const strokeColor = selected
+    ? SELECTED_STROKE_COLOR
+    : (parsedLinkStyle.stroke ?? DEFAULT_STROKE_COLOR);
   const interpolate = readField<string>(edgeData, 'interpolate');
   const animate = readField<boolean>(edgeData, 'animate');
 
   const style: React.CSSProperties = {
     stroke: strokeColor,
-    strokeWidth: config.strokeWidth,
+    strokeWidth: parsedLinkStyle.strokeWidth ?? config.strokeWidth,
   };
 
-  if (config.strokeDasharray) {
-    style.strokeDasharray = config.strokeDasharray;
+  if (parsedLinkStyle.strokeDasharray || config.strokeDasharray) {
+    style.strokeDasharray = parsedLinkStyle.strokeDasharray || config.strokeDasharray;
   }
 
   // 边动画（dasharray 流动）
@@ -235,14 +291,14 @@ export const FlowchartEdgeComponent = memo(function FlowchartEdgeComponent({
   const markerEnd = toMarkerUrl(config.markerEnd);
   const markerStart = toMarkerUrl(config.markerStart);
 
-  // 路径（根据 interpolate 选择曲线类型，使用翻转后的 Position）
+  // 路径（根据 interpolate 选择曲线类型，使用布局阶段计算的正确 Position）
   const [edgePath, labelX, labelY] = getCurvePath(interpolate, {
     sourceX: adjustedSourceX,
     sourceY: adjustedSourceY,
-    sourcePosition: flippedSourcePosition,
+    sourcePosition: finalSourcePosition,
     targetX: adjustedTargetX,
     targetY: adjustedTargetY,
-    targetPosition: flippedTargetPosition,
+    targetPosition: finalTargetPosition,
   });
 
   return (
@@ -301,6 +357,47 @@ function flipPosition(pos: Position): Position {
   }
 }
 
+/** 将字符串连接方向解析为 React Flow Position 枚举 */
+function parsePosition(pos: string): Position {
+  switch (pos) {
+    case 'top': return Position.Top;
+    case 'bottom': return Position.Bottom;
+    case 'left': return Position.Left;
+    case 'right': return Position.Right;
+    default: return Position.Bottom;
+  }
+}
+
+/**
+ * 根据节点和连接方向计算边中心点坐标
+ *
+ * 与 React Flow 默认连接点计算一致：
+ * - Top: 顶边中点
+ * - Bottom: 底边中点
+ * - Left: 左边中点
+ * - Right: 右边中点
+ */
+function getConnectionPoint(
+  node: InternalNode,
+  position: Position,
+): { x: number; y: number } {
+  const nodeX = node.internals.positionAbsolute.x;
+  const nodeY = node.internals.positionAbsolute.y;
+  const width = node.measured.width ?? 0;
+  const height = node.measured.height ?? 0;
+
+  switch (position) {
+    case Position.Top:
+      return { x: nodeX + width / 2, y: nodeY };
+    case Position.Bottom:
+      return { x: nodeX + width / 2, y: nodeY + height };
+    case Position.Left:
+      return { x: nodeX, y: nodeY + height / 2 };
+    case Position.Right:
+      return { x: nodeX + width, y: nodeY + height / 2 };
+  }
+}
+
 /** 安全读取扩展字段 */
 function readField<T>(data: Record<string, unknown> | undefined, key: string): T | undefined {
   if (!data) return undefined;
@@ -309,4 +406,42 @@ function readField<T>(data: Record<string, unknown> | undefined, key: string): T
     return undefined;
   }
   return value as T;
+}
+
+/** 解析 linkStyle 字符串数组，提取 stroke / stroke-width / stroke-dasharray */
+function parseLinkStyle(styles: string[] | undefined): {
+  stroke?: string;
+  strokeWidth?: number;
+  strokeDasharray?: string;
+} {
+  if (!styles || styles.length === 0) return {};
+  const result: { stroke?: string; strokeWidth?: number; strokeDasharray?: string } = {};
+  for (const s of styles) {
+    const colonIndex = s.indexOf(':');
+    if (colonIndex === -1) continue;
+    const key = s.substring(0, colonIndex).trim();
+    const value = s.substring(colonIndex + 1).trim();
+    switch (key) {
+      case 'stroke':
+        result.stroke = value;
+        break;
+      case 'stroke-width':
+      case 'strokeWidth': {
+        const num = Number(value);
+        if (Number.isFinite(num)) {
+          result.strokeWidth = num;
+        } else {
+          const loose = Number(value.replace(/[^0-9.]/g, ''));
+          if (Number.isFinite(loose)) {
+            result.strokeWidth = loose;
+          }
+        }
+        break;
+      }
+      case 'stroke-dasharray':
+        result.strokeDasharray = value;
+        break;
+    }
+  }
+  return result;
 }

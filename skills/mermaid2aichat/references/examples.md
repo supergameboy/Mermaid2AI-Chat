@@ -1,16 +1,16 @@
-# Mermaid Flow Editor — 示例库
+# Mermaid2AIChat — Example Library
 
-## 示例1：用户画图 → AI 分析
+## Example 1: User draws → AI analyzes
 
-用户："看看我画的流程图"
+User: "看看我画的流程图"
 
-AI 行为：
-1. 调用 `get_input`
-2. 返回 `status: 'success'`，包含 mermaid 代码
-3. 分析流程图并回答
+AI behavior:
+1. Call `get_input`.
+2. Receive `status: 'success'` with Mermaid code.
+3. Analyze and respond.
 
 ```
-用户画布内容:
+Canvas content:
   flowchart TD
     A[用户访问] --> B{已登录?}
     B -->|是| C[进入首页]
@@ -21,22 +21,22 @@ AI 行为：
     F -->|否| D
 ```
 
-AI 回答："这是一个用户登录流程图。流程从用户访问开始，判断是否已登录。已登录则进入首页，未登录则跳转登录页输入凭证，验证成功进入首页，失败则回到登录页。"
+AI response: "这是一个用户登录流程图。流程从用户访问开始，判断是否已登录。已登录则进入首页，未登录则跳转登录页输入凭证，验证成功进入首页，失败则回到登录页。"
 
 ---
 
-## 示例2：AI 展示流程图
+## Example 2: AI shows a flowchart in a new tab
 
-用户："解释微服务架构请求流程"
+User: "解释微服务架构请求流程"
 
-AI 行为：
-1. 生成 mermaid 代码
-2. 调用 `create_view` 展示到画布
-3. 返回 `success: true`
-4. 向用户解释流程
+AI behavior:
+1. Generate Mermaid code.
+2. Call `create_view` to open a new editor tab.
+3. Receive `success: true`.
+4. Explain the flow.
 
 ```
-AI 生成的 mermaid:
+AI-generated Mermaid:
   flowchart LR
     A[客户端] --> B[API网关]
     B --> C[认证服务]
@@ -46,114 +46,31 @@ AI 生成的 mermaid:
     F --> G[通知服务]
 ```
 
-AI 回答："已展示到编辑器画布。这是微服务架构的请求流程：客户端请求经过API网关，网关调用认证服务验证身份，然后转发到业务服务，业务服务读写数据库并通过消息队列异步通知。"
+AI response: "已在新标签页展示微服务架构的请求流程。客户端请求经过API网关，网关调用认证服务验证身份，然后转发到业务服务，业务服务读写数据库并通过消息队列异步通知。"
+
+**Key point**: `create_view` always creates a new tab; it never overwrites existing views.
 
 ---
 
-## 示例3：处理空画布
+## Example 3: AI shows a sequence diagram
 
-用户："分析我画的图"
+User: "画一个登录的时序图"
 
-AI 行为：
-1. 调用 `get_input`
-2. 返回 `status: 'empty'`
-3. 提示用户
-
-AI 回答："画布为空，请先在编辑器中绘制流程图。在编辑器中拖拽节点、连接边来创建流程图。"
-
----
-
-## 示例4：处理已消费状态
-
-用户："再分析一下我画的图"
-
-AI 行为：
-1. 调用 `get_input`
-2. 返回 `status: 'already_consumed'`
-3. 提示用户
-
-AI 回答："画布内容已被消费，请点击编辑器中的'重新启用'按钮或编辑画布后再次询问。"
-
-**关键点**：不要重复调用 get_input，直接提示用户重新启用或编辑画布
-
----
-
-## 示例5：用户编辑后重新读取
-
-用户编辑画布后："再分析一下"
-
-AI 行为：
-1. 调用 `get_input`
-2. 用户编辑画布已自动重置消费状态
-3. 返回 `status: 'success'`，包含更新后的 mermaid 代码
-4. 分析新内容
-
-**关键点**：用户编辑画布后，消费状态自动重置，AI 可读取新内容
-
----
-
-## 示例6：create_view 解析失败重试
-
-用户："画一个复杂的架构图"
-
-AI 行为：
-1. 生成 mermaid 代码（可能有语法错误）
-2. 调用 `create_view`
-3. 返回 `success: false`，包含解析错误
-4. AI 修正代码后重试（最多1次）
-5. 重试成功 → 返回 `success: true`
-6. 重试失败 → 展示错误信息给用户
-
----
-
-## 示例7：用户主动调用 SKILL
-
-用户输入 `/mermaid2aichat`
-
-AI 行为：
-1. 默认调用 `get_input` 读取画布
-2. 根据返回状态处理
-
-**关键点**：用户主动调用时默认读图，因为 get_input 是核心功能
-
----
-
-## 示例8：AI 直接输出代码块（不调用 create_view）
-
-用户："用文字描述一下 if-else 的执行流程"
-
-AI 行为：
-1. 判断为简单流程（<5 节点），无需交互编辑
-2. 直接输出 mermaid 代码块，不调用 `create_view`
+AI behavior:
+1. Generate `sequenceDiagram` code.
+2. Call `create_view` (diagramType auto-detected as `sequenceDiagram`).
+3. Receive `success: true`.
 
 ```
-AI 输出（mermaid 代码块）:
-  ```mermaid
-  flowchart TD
-    A[条件判断] -->|真| B[执行 if 分支]
-    A -->|假| C[执行 else 分支]
-  ```
-```
-
-AI 回答："这是 if-else 的执行流程：先判断条件，条件为真执行 if 分支，条件为假执行 else 分支。"
-
-**关键点**：简单流程图（<5 节点）且用户只需查看时，直接输出 mermaid 代码块即可，大多数 AI IDE 已支持渲染
-
----
-
-## 示例9：get_input 服务不可用
-
-用户："看看我画的流程图"
-
-AI 行为：
-1. 调用 `get_input`
-2. 服务不可用（连接失败/超时）
-3. 提示用户启动服务
-
-AI 回答："编辑器服务未启动，请先启动 mermaid 编辑器服务。可以通过以下方式启动：
-- Web 编辑器：运行 `pnpm dev`
-- VSCode 插件：在插件市场安装后启动
-
-启动服务后，再次询问即可读取画布内容。"
-
-**关键点**：服务不可用时不要重试，直接提示用户启动服务
+AI-generated Mermaid:
+  sequenceDiagram
+    participant U as 用户
+    participant C as 客户端
+    participant S as 认证服务
+    U->>C: 输入用户名密码
+    C->>S: 发送登录请求
+    alt 验证成功
+      S-->>C: 返回 Token
+      C-->>U: 进入首页
+    else 验证失败
+      S-->>C: 返回错误

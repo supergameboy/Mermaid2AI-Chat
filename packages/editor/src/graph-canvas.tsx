@@ -46,6 +46,7 @@ import {
   type ArchitectureLayoutHint,
   type ArchitectureEdgeInfo,
 } from '@mermaid2aichat/serializer';
+import type { CanvasDispatcherProps } from './canvas.js';
 import type { CanvasProps, CanvasSnapshot } from './types.js';
 import { getNodeTypes, DirectionContext, ConnectionModeContext, type ConnectionMode } from './nodes/index.js';
 import { getEdgeTypes } from './edges/index.js';
@@ -98,8 +99,8 @@ function readField<T>(data: MermaidNode['data'], key: string): T | undefined {
   return value as T;
 }
 
-/** GraphCanvas Props — 继承 CanvasProps，增加 diagramType */
-export interface GraphCanvasProps extends CanvasProps {
+/** GraphCanvas Props — 继承 CanvasDispatcherProps，增加 diagramType */
+export interface GraphCanvasProps extends CanvasDispatcherProps {
   /** 图表类型（决定节点/边组件和布局算法） */
   diagramType: GraphDiagramType;
 }
@@ -111,6 +112,8 @@ function GraphCanvasInner(props: GraphCanvasProps) {
     syncDirection,
     syncViewport,
     syncMetadata,
+    // syncCanvas 由 Canvas 分发器透传，用于读取 rawCode 等完整状态
+    syncCanvas,
     consumed,
     canvasSource,
     lastConsumedAt,
@@ -140,7 +143,7 @@ function GraphCanvasInner(props: GraphCanvasProps) {
   /** v4：architecture 删除 group 确认对话框状态 */
   const [deleteGroupConfirm, setDeleteGroupConfirm] = useState<{ groupId: string; groupName: string } | null>(null);
   /** M1：flowchart 右键菜单状态 */
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeIds: string[] } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeIds: string[]; targetNodeId?: string } | null>(null);
 
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -194,6 +197,10 @@ function GraphCanvasInner(props: GraphCanvasProps) {
 
   const isApplyingRemoteViewport = useRef(false);
 
+  // ============================================================
+  // 统一画布渲染管线
+  // ============================================================
+
   useEffect(() => {
     // flowchart 类型需要映射 subgraph 节点类型
     if (diagramType === 'flowchart') {
@@ -211,6 +218,16 @@ function GraphCanvasInner(props: GraphCanvasProps) {
   useEffect(() => {
     setMetadata(syncMetadata);
   }, [syncMetadata]);
+
+  // Bug7: 服务端同步 rawCode 时更新 ref，确保刷新/重连后增量序列化仍保留原格式
+  useEffect(() => {
+    const syncedRawCode = isGraphCanvasState(syncCanvas) ? syncCanvas.rawCode : undefined;
+    if (syncedRawCode !== undefined && syncedRawCode !== rawCodeRef.current) {
+      rawCodeRef.current = syncedRawCode;
+      // rawCode 来自外部同步，与当前画布状态可能不一致，重置 previousCanvas 避免错误增量
+      previousCanvasRef.current = undefined;
+    }
+  }, [syncCanvas]);
 
   // mindmap: 从 nodes 的 parentId 派生 edges（用于 React Flow 渲染，不存储在 CanvasState.edges）
   useEffect(() => {
@@ -237,12 +254,14 @@ function GraphCanvasInner(props: GraphCanvasProps) {
   }, [syncViewport, reactFlow]);
 
   const getCanvasSnapshot = useCallback((): CanvasSnapshot => {
+    const rawCode = rawCodeRef.current;
     // mindmap 的 edges 从 parentId 派生，不存储在 CanvasState.edges 中
     if (diagramType === 'mindmap') {
       return {
         nodes: nodesRef.current,
         edges: [],
         direction: directionRef.current,
+        ...(rawCode !== undefined ? { rawCode } : {}),
       };
     }
     // architecture 需要传递 metadata（groups 等）
@@ -252,49 +271,88 @@ function GraphCanvasInner(props: GraphCanvasProps) {
         edges: edgesRef.current,
         direction: directionRef.current,
         ...(metadataRef.current ? { metadata: metadataRef.current } : {}),
+        ...(rawCode !== undefined ? { rawCode } : {}),
       };
     }
     return {
       nodes: nodesRef.current,
       edges: edgesRef.current,
       direction: directionRef.current,
+      ...(rawCode !== undefined ? { rawCode } : {}),
     };
   }, [diagramType]);
+
+  type CanvasChangeType = 'structural' | 'position' | 'deletion';
+
+  interface CanvasChangeOptions {
+    /** 新的节点数组（已包含本次变更） */
+    nodes: MermaidNode[];
+    /** 新的边数组（如果边也变了） */
+    edges?: MermaidEdge[];
+    /**
+     * 变更类型：
+     * - 'structural': 结构变更（新增节点/边、子图操作、形状变更、方向变更）
+     *   → 调用 layoutFn 重新布局
+     * - 'position': 位置变更（拖拽节点）
+     *   → 调用 recalculateSubgraphSizes 重算子图尺寸和位置
+     * - 'deletion': 删除节点/边
+     *   → 保留剩余节点当前位置，仅重算子图尺寸（避免删除后全部重排）
+     */
+    changeType: CanvasChangeType;
+  }
+
+  /** 统一画布变更入口：所有结构变更和位置变更都走此函数 */
+  const applyCanvasChange = useCallback((options: CanvasChangeOptions) => {
+    let { nodes: newNodes, edges: newEdges, changeType } = options;
+    // Bug10: parentId 变更后必须保证父节点排在子节点之前，否则 React Flow 无法识别父子关系
+    newNodes = sortNodesByParentOrder(newNodes);
+    const currentEdges = newEdges ?? edgesRef.current;
+
+    if (changeType === 'structural') {
+      // 使用 directionRef.current 而非 localDirection state，确保 setLocalDirection 后立即调用也能读到最新方向
+      const layouted = layoutFn(newNodes, currentEdges, directionRef.current, metadataRef.current);
+      newNodes = layouted.nodes;
+      newEdges = layouted.edges;
+    } else if (changeType === 'position' && diagramType === 'flowchart') {
+      newNodes = recalculateSubgraphSizes(newNodes);
+    } else if (changeType === 'deletion' && diagramType === 'flowchart') {
+      newNodes = recalculateSubgraphSizes(newNodes);
+    }
+
+    setNodes(newNodes);
+    if (newEdges !== undefined) setEdges(newEdges);
+    setTimeout(() => onCanvasEdit(getCanvasSnapshot()), 0);
+  }, [diagramType, layoutFn, setNodes, setEdges, onCanvasEdit, getCanvasSnapshot]);
+
+  // 当从其他图类型切换回 flowchart 时，触发一次自动布局
+  // 否则节点可能仍沿用其他类型的坐标，导致全部挤在一起
+  const prevDiagramTypeRef = useRef(diagramType);
+  useEffect(() => {
+    if (prevDiagramTypeRef.current !== diagramType && diagramType === 'flowchart') {
+      const mappedNodes = syncNodes.map(mapNodeTypeForFlowchart);
+      applyCanvasChange({ nodes: mappedNodes, edges: syncEdges, changeType: 'structural' });
+    }
+    prevDiagramTypeRef.current = diagramType;
+  }, [diagramType, syncNodes, syncEdges, applyCanvasChange]);
 
   const handleNodesChange = useCallback(
     (changes: NodeChange<MermaidNode>[]) => {
       onNodesChange(changes);
-      const hasUserChange = changes.some((c) => !INTERNAL_CHANGE_TYPES.has(c.type));
-      if (hasUserChange) {
-        setTimeout(() => {
-          onCanvasEdit(getCanvasSnapshot());
-        }, 0);
-      }
+      // 注意：所有用户触发的结构/位置变更统一通过 applyCanvasChange 处理并通知外部
+      // handleNodesChange 只负责 React Flow 内部状态同步，不再直接触发 onCanvasEdit
     },
-    [onNodesChange, onCanvasEdit, getCanvasSnapshot]
+    [onNodesChange]
   );
 
-  /** 拖拽结束后重算子图尺寸 — 仅更新 width/height，不修改 position */
+  /** 拖拽结束后重算子图尺寸和位置 */
   const handleNodeDragStop = useCallback(
     (_event: MouseEvent | TouchEvent, node: Node) => {
       const draggedNode = node as MermaidNode;
       // 只有子节点（有 parentId）拖拽才需要重算父图尺寸
       if (!draggedNode.parentId) return;
-      setNodes((nds) => {
-        const updated = recalculateSubgraphSizes(nds);
-        // 如果尺寸有变化，通知外部
-        const hasSizeChange = updated.some((n, i) =>
-          isSubgraphNode(n) && (n.width !== nds[i].width || n.height !== nds[i].height)
-        );
-        if (hasSizeChange) {
-          setTimeout(() => {
-            onCanvasEdit(getCanvasSnapshot());
-          }, 0);
-        }
-        return updated;
-      });
+      applyCanvasChange({ nodes: nodesRef.current, changeType: 'position' });
     },
-    [setNodes, onCanvasEdit, getCanvasSnapshot]
+    [applyCanvasChange]
   );
 
   /** 判断节点是否为 subgraph 类型 */
@@ -302,17 +360,58 @@ function GraphCanvasInner(props: GraphCanvasProps) {
     return node.type === 'subgraph' || readField<boolean>(node.data, 'isSubgraph') === true;
   }
 
+  /**
+   * 计算 subgraph 节点的绝对坐标（累加所有父 subgraph 的 position）
+   * 用于将子节点从 subgraph 中移出时做坐标转换
+   */
+  function getSubgraphAbsolutePosition(node: MermaidNode): { x: number; y: number } {
+    let x = node.position.x;
+    let y = node.position.y;
+    let currentParentId = node.parentId;
+    const visited = new Set<string>();
+    while (currentParentId && !visited.has(currentParentId)) {
+      visited.add(currentParentId);
+      const parent = nodesRef.current.find((p) => p.id === currentParentId);
+      if (!parent) break;
+      x += parent.position.x;
+      y += parent.position.y;
+      currentParentId = parent.parentId;
+    }
+    return { x, y };
+  }
+
+  /**
+   * 按 parentId 拓扑排序节点数组，确保父节点排在子节点之前
+   * React Flow 要求 parent nodes 必须在 children 之前处理
+   */
+  function sortNodesByParentOrder<T extends { id: string; parentId?: string | null }>(nodes: T[]): T[] {
+    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+    const visited = new Set<string>();
+    const result: T[] = [];
+
+    function visit(node: T) {
+      if (visited.has(node.id)) return;
+      visited.add(node.id);
+      if (node.parentId) {
+        const parent = nodeMap.get(node.parentId);
+        if (parent) visit(parent);
+      }
+      result.push(node);
+    }
+
+    for (const node of nodes) {
+      visit(node);
+    }
+    return result;
+  }
+
   const handleEdgesChange = useCallback(
     (changes: EdgeChange<MermaidEdge>[]) => {
       onEdgesChange(changes);
-      const hasUserChange = changes.some((c) => !INTERNAL_CHANGE_TYPES.has(c.type));
-      if (hasUserChange) {
-        setTimeout(() => {
-          onCanvasEdit(getCanvasSnapshot());
-        }, 0);
-      }
+      // 注意：所有用户触发的结构/位置变更统一通过 applyCanvasChange 处理并通知外部
+      // handleEdgesChange 只负责 React Flow 内部状态同步，不再直接触发 onCanvasEdit
     },
-    [onEdgesChange, onCanvasEdit, getCanvasSnapshot]
+    [onEdgesChange]
   );
 
   const onConnect = useCallback(
@@ -354,12 +453,10 @@ function GraphCanvasInner(props: GraphCanvasProps) {
         type: connectionMode === 'nearest' ? 'floating' : 'smoothstep',
         data: { edgeStyle: 'arrow' },
       };
-      setEdges((eds) => addEdge(newEdge, eds));
-      setTimeout(() => {
-        onCanvasEdit(getCanvasSnapshot());
-      }, 0);
+      const newEdges = addEdge(newEdge, edgesRef.current);
+      applyCanvasChange({ nodes: nodesRef.current, edges: newEdges, changeType: 'structural' });
     },
-    [setEdges, onCanvasEdit, getCanvasSnapshot, connectionMode, diagramType]
+    [connectionMode, diagramType, applyCanvasChange, onCanvasEdit, getCanvasSnapshot]
   );
 
   // ============================================================
@@ -502,19 +599,9 @@ function GraphCanvasInner(props: GraphCanvasProps) {
           shape,
         },
       };
-      setNodes((nds) => {
-        const newNodes = [...nds, newNode];
-        setTimeout(() => {
-          onCanvasEdit({
-            nodes: newNodes,
-            edges: edgesRef.current,
-            direction: directionRef.current,
-          });
-        }, 0);
-        return newNodes;
-      });
+      applyCanvasChange({ nodes: [...nodesRef.current, newNode], changeType: 'structural' });
     },
-    [setNodes, onCanvasEdit, diagramType, handleAddGroup, handleAddService, handleAddJunction]
+    [diagramType, applyCanvasChange, handleAddGroup, handleAddService, handleAddJunction]
   );
 
   const onDrop = useCallback(
@@ -549,19 +636,9 @@ function GraphCanvasInner(props: GraphCanvasProps) {
         position,
         data: { label: '新节点', shape },
       };
-      setNodes((nds) => {
-        const newNodes = [...nds, newNode];
-        setTimeout(() => {
-          onCanvasEdit({
-            nodes: newNodes,
-            edges: edgesRef.current,
-            direction: directionRef.current,
-          });
-        }, 0);
-        return newNodes;
-      });
+      applyCanvasChange({ nodes: [...nodesRef.current, newNode], changeType: 'structural' });
     },
-    [reactFlow, setNodes, onCanvasEdit, diagramType, handleAddGroup, handleAddService, handleAddJunction]
+    [reactFlow, diagramType, applyCanvasChange, handleAddGroup, handleAddService, handleAddJunction]
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -628,19 +705,9 @@ function GraphCanvasInner(props: GraphCanvasProps) {
         position,
         data: { label: '新节点', shape: 'rect' },
       };
-      setNodes((nds) => {
-        const newNodes = [...nds, newNode];
-        setTimeout(() => {
-          onCanvasEdit({
-            nodes: newNodes,
-            edges: edgesRef.current,
-            direction: directionRef.current,
-          });
-        }, 0);
-        return newNodes;
-      });
+      applyCanvasChange({ nodes: [...nodesRef.current, newNode], changeType: 'structural' });
     },
-    [reactFlow, setNodes, onCanvasEdit, diagramType]
+    [reactFlow, diagramType, applyCanvasChange]
   );
 
   const onNodeDoubleClick = useCallback((_: React.MouseEvent, node: Node) => {
@@ -654,14 +721,12 @@ function GraphCanvasInner(props: GraphCanvasProps) {
   }, []);
 
   const confirmNodeEdit = useCallback((nodeId: string, newLabel: string) => {
-    setNodes((nds) =>
-      nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, label: newLabel } } : n))
+    const newNodes = nodesRef.current.map((n) =>
+      n.id === nodeId ? { ...n, data: { ...n.data, label: newLabel } } : n
     );
     setEditingNodeId(null);
-    setTimeout(() => {
-      onCanvasEdit(getCanvasSnapshot());
-    }, 0);
-  }, [setNodes, onCanvasEdit, getCanvasSnapshot]);
+    applyCanvasChange({ nodes: newNodes, changeType: 'structural' });
+  }, [applyCanvasChange]);
 
   const confirmEdgeEdit = useCallback((edgeId: string, newLabel: string) => {
     setEdges((eds) =>
@@ -709,14 +774,7 @@ function GraphCanvasInner(props: GraphCanvasProps) {
         ? nodes.map(mapNodeTypeForFlowchart)
         : nodes;
 
-      // 使用 dagre 布局计算节点位置（解析器输出的节点 position 可能为 0,0 导致重叠）
-      const layouted = layoutFn(mappedNodes, edges, safeDirection, newMetadata);
-      const layoutedNodes = diagramType === 'flowchart'
-        ? layouted.nodes.map(mapNodeTypeForFlowchart)
-        : layouted.nodes;
-
-      setNodes(layoutedNodes);
-      setEdges(layouted.edges);
+      // 统一走画布渲染管线：structural 变更会调用 layoutFn 并触发 onCanvasEdit
       setLocalDirection(safeDirection);
       directionRef.current = safeDirection;
       if (newMetadata) {
@@ -724,20 +782,11 @@ function GraphCanvasInner(props: GraphCanvasProps) {
       }
       setCodeError(null);
 
-      setTimeout(() => {
-        // mindmap 的 edges 从 parentId 派生，CanvasState.edges 为空数组
-        const effectiveEdges = diagramType === 'mindmap' ? [] : layouted.edges;
-        onCanvasEdit({
-          nodes: layoutedNodes,
-          edges: effectiveEdges,
-          direction: safeDirection,
-          ...(newMetadata ? { metadata: newMetadata } : {}),
-        });
-      }, 0);
+      applyCanvasChange({ nodes: mappedNodes, edges, changeType: 'structural' });
     } else {
       setCodeError('内部错误：类型守卫不匹配');
     }
-  }, [setNodes, setEdges, setLocalDirection, setMetadata, onCanvasEdit, diagramType, onCanvasUpdate, layoutFn]);
+  }, [parseMermaid, setLocalDirection, setMetadata, setCodeError, diagramType, onCanvasUpdate, applyCanvasChange]);
 
   const onSelectionChange = useCallback(({ nodes: selNodes, edges: selEdges }: { nodes: Node[]; edges: Edge[] }) => {
     setSelectedNodeId(selNodes.length === 1 ? selNodes[0].id : null);
@@ -772,16 +821,14 @@ function GraphCanvasInner(props: GraphCanvasProps) {
   );
 
   const handleUpdateNode = useCallback((id: string, data: Partial<MermaidNode['data']>) => {
-    setNodes((nds) => nds.map((n) => {
+    const newNodes = nodesRef.current.map((n) => {
       if (n.id !== id) return n;
       const newData = { ...n.data, ...data };
       const newType = data.shape ?? n.type;
       return { ...n, type: newType, data: newData };
-    }));
-    setTimeout(() => {
-      onCanvasEdit(getCanvasSnapshot());
-    }, 0);
-  }, [setNodes, onCanvasEdit, getCanvasSnapshot]);
+    });
+    applyCanvasChange({ nodes: newNodes, changeType: 'structural' });
+  }, [applyCanvasChange]);
 
   const handleUpdateEdge = useCallback((id: string, data: Partial<MermaidEdge['data']>) => {
     setEdges((eds) => eds.map((e) => (e.id === id ? { ...e, data: { ...e.data, ...data } } : e)));
@@ -1061,7 +1108,8 @@ function GraphCanvasInner(props: GraphCanvasProps) {
       setTimeout(() => {
         onCanvasEdit(getCanvasSnapshot());
       }, 0);
-      return newNodes;
+      // Bug10: parentId 变更后必须保证父节点排在子节点之前
+      return sortNodesByParentOrder(newNodes);
     });
     setCodeError(null);
   }, [setNodes, onCanvasEdit, getCanvasSnapshot]);
@@ -1198,19 +1246,24 @@ function GraphCanvasInner(props: GraphCanvasProps) {
             return;
           }
           // 其他情况使用 reactFlow.deleteElements
+          const deletedNodeIds = new Set(selectedNodes.map((n) => n.id));
           reactFlow.deleteElements({
             nodes: selectedNodes.map((n) => ({ id: n.id })),
             edges: selectedEdges.map((e) => ({ id: e.id })),
           });
           setTimeout(() => {
-            onCanvasEdit(getCanvasSnapshot());
+            // Bug9: 显式过滤与被删节点关联的边，避免 reactFlow 遗漏导致悬挂边
+            const nextEdges = edgesRef.current.filter(
+              (e) => !deletedNodeIds.has(e.source) && !deletedNodeIds.has(e.target),
+            );
+            applyCanvasChange({ nodes: nodesRef.current, edges: nextEdges, changeType: 'deletion' });
           }, 0);
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [reactFlow, onCanvasEdit, getCanvasSnapshot, diagramType, handleDeleteNodeRecursive]);
+  }, [reactFlow, onCanvasEdit, getCanvasSnapshot, diagramType, handleDeleteNodeRecursive, applyCanvasChange]);
 
   // ============================================================
   // M1: flowchart 右键菜单 + subgraph 创建/管理
@@ -1225,14 +1278,14 @@ function GraphCanvasInner(props: GraphCanvasProps) {
       .filter((n) => n.selected)
       .map((n) => n.id);
     const nodeIds = selectedIds.length > 0 ? selectedIds : [node.id];
-    setContextMenu({ x: event.clientX, y: event.clientY, nodeIds });
+    setContextMenu({ x: event.clientX, y: event.clientY, nodeIds, targetNodeId: node.id });
   }, [diagramType]);
 
   /** 右键画布空白 — 显示上下文菜单（无选中节点） */
   const handlePaneContextMenu = useCallback((event: React.MouseEvent | MouseEvent) => {
     if (diagramType !== 'flowchart') return;
     event.preventDefault();
-    setContextMenu({ x: event.clientX, y: event.clientY, nodeIds: [] });
+    setContextMenu({ x: event.clientX, y: event.clientY, nodeIds: [], targetNodeId: undefined });
   }, [diagramType]);
 
   /** 创建空 subgraph */
@@ -1249,13 +1302,9 @@ function GraphCanvasInner(props: GraphCanvasProps) {
         subgraphNodes: [],
       },
     };
-    setNodes((nds) => {
-      const newNodes = [...nds, newNode];
-      setTimeout(() => onCanvasEdit(getCanvasSnapshot()));
-      return newNodes;
-    });
+    applyCanvasChange({ nodes: [...nodesRef.current, newNode], changeType: 'structural' });
     setSelectedNodeId(subgraphId);
-  }, [setNodes, onCanvasEdit, getCanvasSnapshot]);
+  }, [applyCanvasChange]);
 
   /** 创建 subgraph 包含选中节点 */
   const handleCreateSubgraphWithSelected = useCallback(() => {
@@ -1285,56 +1334,52 @@ function GraphCanvasInner(props: GraphCanvasProps) {
       },
     };
 
-    setNodes((nds) => {
-      // Bug4 修复：将选中节点的绝对坐标转换为相对于 subgraph 的坐标
-      // dagre 约定子节点 Y 坐标包含 SUBGRAPH_TITLE_HEIGHT 偏移
-      const newNodes = nds.map((n) => {
-        if (!selectedNodeIds.includes(n.id)) return n;
-        // 计算节点绝对坐标（可能已在其他子图中）
-        let absX = n.position.x;
-        let absY = n.position.y;
-        let currentParentId = n.parentId;
-        const visited = new Set<string>();
-        while (currentParentId && !visited.has(currentParentId)) {
-          visited.add(currentParentId);
-          const parent = nds.find((p) => p.id === currentParentId);
-          if (!parent) break;
-          absX += parent.position.x;
-          absY += parent.position.y;
-          currentParentId = parent.parentId;
-        }
-        return {
-          ...n,
-          parentId: subgraphId,
-          position: {
-            x: absX - subgraphAbsPos.x,
-            y: absY - subgraphAbsPos.y + SUBGRAPH_TITLE_HEIGHT,
-          },
-        };
-      });
-      newNodes.push(newNode);
-      // Bug4 修复：调用 recalculateSubgraphSizes 计算 subgraph 的 width/height
-      const result = recalculateSubgraphSizes(newNodes);
-      setTimeout(() => onCanvasEdit(getCanvasSnapshot()));
-      return result;
+    // 将选中节点的绝对坐标转换为相对于 subgraph 的坐标
+    // dagre 约定子节点 Y 坐标包含 SUBGRAPH_TITLE_HEIGHT 偏移
+    const newNodes = nodesRef.current.map((n) => {
+      if (!selectedNodeIds.includes(n.id)) return n;
+      let absX = n.position.x;
+      let absY = n.position.y;
+      let currentParentId = n.parentId;
+      const visited = new Set<string>();
+      while (currentParentId && !visited.has(currentParentId)) {
+        visited.add(currentParentId);
+        const parent = nodesRef.current.find((p) => p.id === currentParentId);
+        if (!parent) break;
+        absX += parent.position.x;
+        absY += parent.position.y;
+        currentParentId = parent.parentId;
+      }
+      return {
+        ...n,
+        parentId: subgraphId,
+        position: {
+          x: absX - subgraphAbsPos.x,
+          y: absY - subgraphAbsPos.y + SUBGRAPH_TITLE_HEIGHT,
+        },
+      };
     });
+    newNodes.push(newNode);
+
+    applyCanvasChange({ nodes: newNodes, changeType: 'structural' });
     setSelectedNodeId(subgraphId);
-  }, [contextMenu, setNodes, onCanvasEdit, getCanvasSnapshot]);
+  }, [contextMenu, applyCanvasChange]);
 
   /** 右键菜单切换形状 */
   const handleSwitchShapeFromMenu = useCallback((shape: MermaidShapeType) => {
     if (!contextMenu || contextMenu.nodeIds.length === 0) return;
     const ids = contextMenu.nodeIds;
-    setNodes((nds) => {
-      const newNodes = nds.map((n) =>
-        ids.includes(n.id)
-          ? { ...n, data: { ...n.data, shape } }
-          : n,
-      );
-      setTimeout(() => onCanvasEdit(getCanvasSnapshot()));
-      return newNodes;
-    });
-  }, [contextMenu, setNodes, onCanvasEdit, getCanvasSnapshot]);
+    const newNodes = nodesRef.current.map((n) =>
+      ids.includes(n.id)
+        ? { ...n, data: { ...n.data, shape } }
+        : n,
+    );
+    applyCanvasChange({ nodes: newNodes, changeType: 'structural' });
+  }, [contextMenu, applyCanvasChange]);
+
+
+
+
 
   /** 移动节点到 subgraph（subgraphId 为 null 表示移出到顶层）
    *
@@ -1349,109 +1394,126 @@ function GraphCanvasInner(props: GraphCanvasProps) {
    * - 移入嵌套子图时，需要计算目标 subgraph 的绝对坐标（累加其所有祖先）
    */
   const handleMoveToSubgraph = useCallback((nodeId: string, subgraphId: string | null) => {
-    setNodes((nds) => {
-      // 计算节点的绝对坐标（累加所有祖先 subgraph 的 position）
-      const getAbsolutePosition = (node: MermaidNode): { x: number; y: number } => {
-        let x = node.position.x;
-        let y = node.position.y;
-        let currentParentId = node.parentId;
-        const visited = new Set<string>(); // 防止循环引用
-        while (currentParentId && !visited.has(currentParentId)) {
-          visited.add(currentParentId);
-          const parent = nds.find((p) => p.id === currentParentId);
-          if (!parent) break;
-          x += parent.position.x;
-          y += parent.position.y;
-          currentParentId = parent.parentId;
-        }
-        return { x, y };
-      };
+    // 计算节点的绝对坐标（累加所有祖先 subgraph 的 position）
+    const getAbsolutePosition = (node: MermaidNode): { x: number; y: number } => {
+      let x = node.position.x;
+      let y = node.position.y;
+      let currentParentId = node.parentId;
+      const visited = new Set<string>();
+      while (currentParentId && !visited.has(currentParentId)) {
+        visited.add(currentParentId);
+        const parent = nodesRef.current.find((p) => p.id === currentParentId);
+        if (!parent) break;
+        x += parent.position.x;
+        y += parent.position.y;
+        currentParentId = parent.parentId;
+      }
+      return { x, y };
+    };
 
-      const moved = nds.map((n) => {
-        if (n.id !== nodeId) return n;
-        if (subgraphId === null) {
-          // 移出子图：相对坐标 → 绝对坐标
-          // getAbsolutePosition 累加所有祖先的 position（已含 SUBGRAPH_TITLE_HEIGHT 偏移），
-          // 返回的已经是正确的绝对坐标，不需要额外加偏移
-          const { parentId, extent, ...rest } = n;
-          const absolutePos = getAbsolutePosition(n);
-          return {
-            ...rest,
-            position: {
-              x: absolutePos.x,
-              y: absolutePos.y,
-            },
-          };
-        }
-        // 移入子图：绝对坐标 → 相对坐标
-        // dagre 布局约定子节点 Y 坐标包含 SUBGRAPH_TITLE_HEIGHT 偏移，
-        // 所以相对坐标 = 绝对坐标差 + SUBGRAPH_TITLE_HEIGHT
-        const subgraph = nds.find((p) => p.id === subgraphId);
-        if (!subgraph) return { ...n, parentId: subgraphId };
-        const nodeAbsPos = getAbsolutePosition(n);
-        const subgraphAbsPos = getAbsolutePosition(subgraph);
+    const moved = nodesRef.current.map((n) => {
+      if (n.id !== nodeId) return n;
+      if (subgraphId === null) {
+        // 移出子图：相对坐标 → 绝对坐标
+        const { parentId, extent, ...rest } = n;
+        const absolutePos = getAbsolutePosition(n);
         return {
-          ...n,
-          parentId: subgraphId,
+          ...rest,
           position: {
-            x: nodeAbsPos.x - subgraphAbsPos.x,
-            y: nodeAbsPos.y - subgraphAbsPos.y + SUBGRAPH_TITLE_HEIGHT,
+            x: absolutePos.x,
+            y: absolutePos.y,
           },
         };
-      });
-      // Bug2: 移动节点后重算所有 subgraph 尺寸（源/目标 subgraph 都需要更新）
-      const newNodes = recalculateSubgraphSizes(moved);
-      setTimeout(() => onCanvasEdit(getCanvasSnapshot()));
-      return newNodes;
+      }
+      // 移入子图：绝对坐标 → 相对坐标
+      const subgraph = nodesRef.current.find((p) => p.id === subgraphId);
+      if (!subgraph) return { ...n, parentId: subgraphId };
+      const nodeAbsPos = getAbsolutePosition(n);
+      const subgraphAbsPos = getAbsolutePosition(subgraph);
+      return {
+        ...n,
+        parentId: subgraphId,
+        position: {
+          x: nodeAbsPos.x - subgraphAbsPos.x,
+          y: nodeAbsPos.y - subgraphAbsPos.y + SUBGRAPH_TITLE_HEIGHT,
+        },
+      };
     });
-  }, [setNodes, onCanvasEdit, getCanvasSnapshot]);
+
+    applyCanvasChange({ nodes: moved, changeType: 'structural' });
+  }, [applyCanvasChange]);
 
   /** 删除 subgraph 节点（子节点移出到顶层） */
   const handleDeleteSubgraph = useCallback((id: string) => {
-    setNodes((nds) => {
-      // Bug4 修复：先获取被删除 subgraph 的绝对位置，用于子节点坐标转换
-      const subgraph = nds.find((n) => n.id === id);
-      const subgraphAbsPos = subgraph ? (() => {
-        let x = subgraph.position.x;
-        let y = subgraph.position.y;
-        let currentParentId = subgraph.parentId;
-        const visited = new Set<string>();
-        while (currentParentId && !visited.has(currentParentId)) {
-          visited.add(currentParentId);
-          const parent = nds.find((p) => p.id === currentParentId);
-          if (!parent) break;
-          x += parent.position.x;
-          y += parent.position.y;
-          currentParentId = parent.parentId;
-        }
-        return { x, y };
-      })() : { x: 0, y: 0 };
+    // Bug4 修复：先获取被删除 subgraph 的绝对位置，用于子节点坐标转换
+    const subgraph = nodesRef.current.find((n) => n.id === id);
+    const subgraphAbsPos = subgraph ? (() => {
+      let x = subgraph.position.x;
+      let y = subgraph.position.y;
+      let currentParentId = subgraph.parentId;
+      const visited = new Set<string>();
+      while (currentParentId && !visited.has(currentParentId)) {
+        visited.add(currentParentId);
+        const parent = nodesRef.current.find((p) => p.id === currentParentId);
+        if (!parent) break;
+        x += parent.position.x;
+        y += parent.position.y;
+        currentParentId = parent.parentId;
+      }
+      return { x, y };
+    })() : { x: 0, y: 0 };
 
-      const filtered = nds
-        .filter((n) => n.id !== id)
-        .map((n) => {
-          if (n.parentId === id) {
-            // Bug4 修复：相对坐标 → 绝对坐标
-            // 子节点的 position.y 已含 SUBGRAPH_TITLE_HEIGHT 偏移，
-            // 转为绝对坐标时需要加上 subgraph 的绝对位置，并减去偏移
-            const { parentId, extent, ...rest } = n;
-            return {
-              ...rest,
-              position: {
-                x: n.position.x + subgraphAbsPos.x,
-                y: n.position.y + subgraphAbsPos.y - SUBGRAPH_TITLE_HEIGHT,
-              },
-            };
-          }
-          return n;
-        });
-      // Bug2: 删除子图后重算剩余 subgraph 尺寸
-      const newNodes = recalculateSubgraphSizes(filtered);
-      setTimeout(() => onCanvasEdit(getCanvasSnapshot()));
-      return newNodes;
-    });
+    const filtered = nodesRef.current
+      .filter((n) => n.id !== id)
+      .map((n) => {
+        if (n.parentId === id) {
+          // Bug4 修复：相对坐标 → 绝对坐标
+          const { parentId, extent, ...rest } = n;
+          return {
+            ...rest,
+            position: {
+              x: n.position.x + subgraphAbsPos.x,
+              y: n.position.y + subgraphAbsPos.y - SUBGRAPH_TITLE_HEIGHT,
+            },
+          };
+        }
+        return n;
+      });
+
+    // Bug9: 删除与子图关联的边
+    const nextEdges = edgesRef.current.filter(
+      (e) => e.source !== id && e.target !== id,
+    );
+    applyCanvasChange({ nodes: filtered, edges: nextEdges, changeType: 'deletion' });
     setSelectedNodeId(null);
-  }, [setNodes, onCanvasEdit, getCanvasSnapshot]);
+  }, [applyCanvasChange]);
+
+  /** 右键菜单删除选中节点（子图节点会被过滤，避免子图被 reactFlow 直接删除导致子节点孤立） */
+  const handleDeleteNodeFromMenu = useCallback(() => {
+    if (!contextMenu || contextMenu.nodeIds.length === 0) return;
+    const idsToDelete = contextMenu.nodeIds.filter((id) => {
+      const node = nodesRef.current.find((n) => n.id === id);
+      return (node?.data as Record<string, unknown>)?.isSubgraph !== true;
+    });
+    if (idsToDelete.length === 0) return;
+    const deletedNodeIds = new Set(idsToDelete);
+    reactFlow.deleteElements({
+      nodes: idsToDelete.map((id) => ({ id })),
+    });
+    setTimeout(() => {
+      // Bug9: 显式过滤与被删节点关联的边，避免 reactFlow 遗漏导致悬挂边
+      const nextEdges = edgesRef.current.filter(
+        (e) => !deletedNodeIds.has(e.source) && !deletedNodeIds.has(e.target),
+      );
+      applyCanvasChange({ nodes: nodesRef.current, edges: nextEdges, changeType: 'deletion' });
+    }, 0);
+  }, [contextMenu, reactFlow, applyCanvasChange]);
+
+  /** 右键菜单删除子图 */
+  const handleDeleteSubgraphFromMenu = useCallback(() => {
+    if (!contextMenu?.targetNodeId) return;
+    handleDeleteSubgraph(contextMenu.targetNodeId);
+  }, [contextMenu, handleDeleteSubgraph]);
 
   const editingNode = editingNodeId ? nodes.find((n) => n.id === editingNodeId) : null;
   const editingEdge = editingEdgeId ? edges.find((e) => e.id === editingEdgeId) : null;
@@ -1525,20 +1587,10 @@ function GraphCanvasInner(props: GraphCanvasProps) {
         onDirectionChange={(dir) => {
           setLocalDirection(dir);
           directionRef.current = dir;
-          // 使用 diagramType 对应的布局函数
-          const { nodes: newNodes, edges: newEdges } = layoutFn(nodesRef.current, edgesRef.current, dir);
-          setNodes(newNodes);
-          setEdges(newEdges);
-          setTimeout(() => {
-            newNodes.forEach((node) => updateNodeInternals(node.id));
-          }, 0);
           onDirectionChange(dir);
+          applyCanvasChange({ nodes: nodesRef.current, edges: edgesRef.current, changeType: 'structural' });
           setTimeout(() => {
-            onCanvasEdit({
-              nodes: newNodes,
-              edges: newEdges,
-              direction: dir,
-            });
+            nodesRef.current.forEach((node) => updateNodeInternals(node.id));
           }, 0);
         }}
       />
@@ -1691,16 +1743,26 @@ function GraphCanvasInner(props: GraphCanvasProps) {
             </ConnectionModeContext.Provider>
           </DirectionContext.Provider>
 
-          {contextMenu && (
-            <ContextMenu
-              position={{ x: contextMenu.x, y: contextMenu.y }}
-              selectedNodeIds={contextMenu.nodeIds}
-              onCreateSubgraph={handleCreateSubgraph}
-              onCreateSubgraphWithSelected={handleCreateSubgraphWithSelected}
-              onSwitchShape={handleSwitchShapeFromMenu}
-              onClose={() => setContextMenu(null)}
-            />
-          )}
+          {contextMenu && (() => {
+            const targetNode = contextMenu.targetNodeId
+              ? nodesRef.current.find((n) => n.id === contextMenu.targetNodeId)
+              : undefined;
+            const isTargetSubgraph = targetNode
+              ? (targetNode.data as Record<string, unknown>).isSubgraph === true
+              : false;
+            return (
+              <ContextMenu
+                position={{ x: contextMenu.x, y: contextMenu.y }}
+                selectedNodeIds={contextMenu.nodeIds}
+                onCreateSubgraph={handleCreateSubgraph}
+                onCreateSubgraphWithSelected={handleCreateSubgraphWithSelected}
+                onSwitchShape={handleSwitchShapeFromMenu}
+                onDeleteNode={isTargetSubgraph ? undefined : handleDeleteNodeFromMenu}
+                onDeleteSubgraph={isTargetSubgraph ? handleDeleteSubgraphFromMenu : undefined}
+                onClose={() => setContextMenu(null)}
+              />
+            );
+          })()}
 
           {editingNode && (
             <div

@@ -4,16 +4,16 @@ description: |
   This skill should be used when the user asks to "看看我画的", "分析这个流程",
   "我画了个图", "我画的流程图", "看看这个图", "读取画布", "read my drawing",
   or mentions analyzing a flowchart they've drawn in the visual editor.
-  Also use when the user asks to "画流程图", "画一个流程", "展示流程",
-  "可视化流程", "visualize flow", or wants to show a flow in an
+  Also use when the user asks to "画流程图", "画时序图", "画类图", "展示流程",
+  "可视化流程", "visualize flow", or wants to show a diagram in an
   interactive editable canvas. Also triggers on mentions of "mermaid",
-  "flowchart", "process diagram", or "流程图" in the context of drawing,
-  reading, or visualizing process flows. Core capability: read user's drawn
-  flowcharts via get_input (fills the gap where AI IDEs cannot read visual
-  editor content). Enhancement: show flows via create_view (optional, since
-  most AI IDEs render mermaid code blocks natively).
-allowed-tools: mcp__mermaid2aichat__get_input, mcp__mermaid2aichat__create_view
-version: 1.1.0
+  "flowchart", "sequenceDiagram", "时序图", "流程图", "类图", or "er图"
+  in the context of drawing, reading, or visualizing diagrams.
+  Core capability: read user's drawn flowcharts via get_input (fills the gap
+  where AI IDEs cannot read visual editor content).
+  Enhancement: show diagrams via create_view and manage tabs via list_views.
+allowed-tools: mcp__mermaid2aichat__get_input, mcp__mermaid2aichat__create_view, mcp__mermaid2aichat__list_views
+version: 1.2.0
 author: Supergameboy/AAG
 license: MIT
 mcp-servers:
@@ -23,136 +23,177 @@ user-invocable: true
 
 # Mermaid2AIChat
 
-## 核心定位
+## Core Positioning
 
-**get_input 是核心价值**：填补 AI 无法读图的空白。用户在可视化编辑器中绘制流程图，AI 通过 `get_input` 读取并分析。
+**get_input is the primary value**: fill the gap where AI IDEs cannot read visual editor content. When a user draws a flowchart in the visual editor, AI reads and analyzes it through `get_input`.
 
-**create_view 是可选增强**：大多数 AI IDE 已支持 mermaid 代码块渲染，`create_view` 提供交互式可编辑画布作为增强体验。
+**create_view is an optional enhancement**: create a new editor tab and render Mermaid code as an interactive, editable canvas. Useful when the user needs to edit the diagram or when the diagram type benefits from the editor (e.g., flowchart, sequenceDiagram).
 
-## 两个预设场景
+**list_views is a tab manager**: list all open tabs/views, including AI-generated history and user-created tabs, so the user can choose which view to read or switch to.
 
-### 场景1：用户画图 → AI 分析（get_input）
+## Multi-Tab Architecture
 
-用户在编辑器中绘制流程图，然后要求 AI 分析。
+- Each `create_view` call creates a **new tab** without overwriting existing views.
+- `get_input` without `viewId` reads the **active tab** and marks it consumed.
+- `get_input` with `viewId` reads a **specific historical tab** without changing its consumed state.
+- `list_views` returns all tabs and the currently active one.
 
-**触发关键词**：看看我画的、分析这个流程、我画了个图、读取画布、read my drawing
+## Supported Diagram Types
 
-**执行流程**：
-1. 调用 `get_input` 读取画布
-2. 根据返回的 `status` 字段处理：
-   - `status: 'success'` → 获取 mermaid 代码，进行分析/回答
-   - `status: 'already_consumed'` → 提示"画布已消费，请点击重新启用或编辑画布后再次询问"
-   - `status: 'empty'` → 提示"画布为空，请先在编辑器中绘制流程图"
-   - `status: 'ai_content'` → 提示"画布当前内容为AI生成，如需分析请先编辑画布"
+### create_view supports 12 types
 
-### 场景2：AI 展示 → 用户查看（create_view）
+`flowchart`, `sequenceDiagram`, `classDiagram`, `erDiagram`, `mindmap`, `stateDiagram`, `architecture`, `gantt`, `pie`, `timeline`, `quadrantChart`, `xychart`.
 
-AI 生成流程图代码，通过 `create_view` 展示到编辑器画布。
+If `diagramType` is omitted, auto-detect from the Mermaid code.
 
-**触发关键词**：画流程图、展示流程、可视化流程、visualize flow
+### get_input only supports graph canvas state (flowchart)
 
-**执行流程**：
-1. 生成 mermaid flowchart 代码
-2. 调用 `create_view` 展示到画布
-3. 根据返回结果处理：
-   - `success: true` → 告知"已展示到编辑器画布"
-   - `success: false` → 修正 mermaid 代码后重试（最多1次），仍失败则展示错误信息
+- `get_input` returns `status: 'error'` for non-graph canvas types such as `sequenceDiagram`, `classDiagram`, `gantt`, etc.
+- For flowcharts, it returns the serialized Mermaid code.
 
-## 何时不调用工具
+## Tool Decision Tree
 
-### 何时不调用 create_view（直接输出 mermaid 代码块即可）
+### Default behavior when user invokes the skill
 
-- 简单流程图（<5 节点）
-- 用户只需查看，无需交互编辑
-- 大多数 AI IDE 已支持 mermaid 代码块渲染，直接输出代码即可
+Call `get_input` to read the active canvas, then respond based on the returned status.
 
-### 何时不调用任何工具
+### Scenario 1: user draws → AI reads (get_input)
 
-- 用户只是询问 mermaid 语法（如"mermaid 怎么画菱形"）→ 直接回答语法
-- 用户要求修改代码（非流程图相关）→ 直接修改代码
-- 简单的 2 步流程（如"A 然后 B"）→ 直接文字描述即可，无需可视化
+Call `get_input` when the user says things like:
 
-## Mermaid 代码规范
+- "看看我画的"
+- "分析这个流程"
+- "我画了个图"
+- "读取画布"
+- "read my drawing"
 
-### 核心规范（必须遵守）
+Handle the `status` field:
 
-1. 使用 `flowchart` 关键字（非 `graph`）
-2. 声明方向：`flowchart TD` 或 `flowchart LR`
-3. 节点 ID 使用短 ID（A, B, C...）
-4. 节点文本用形状语法包裹：`A[开始]`
+- `status: 'success'` → analyze the returned `mermaid` code.
+- `status: 'already_consumed'` → tell the user the canvas has been consumed; ask them to click "重新启用" or edit the canvas before asking again.
+- `status: 'empty'` → tell the user the canvas is empty and ask them to draw first.
+- `status: 'ai_content'` → tell the user the current canvas content is AI-generated; ask them to edit it if they want analysis.
+- `status: 'error'` → show the error message (e.g., unsupported diagram type).
 
-### 快速参考
+### Scenario 2: AI shows → user views (create_view)
 
-**节点形状**：14种（矩形 `[文本]`、圆角 `(文本)`、菱形 `{文本}`、圆形 `((文本))`、圆柱 `[(文本)]`、不对称 `>文本]` 等）
+Generate Mermaid code and call `create_view` when:
 
-**边样式**：8种（箭头 `-->`、直线 `---`、虚线 `-.-`、粗线箭头 `==>`、圆形端点 `---o`、交叉端点 `---x`、双向箭头 `<--->` 等）
+- The diagram is complex (5+ nodes or multiple participants).
+- The user asks to edit or refine the diagram interactively.
+- The diagram type is `flowchart`, `sequenceDiagram`, `classDiagram`, etc., and the editor adds value over a static code block.
 
-**边标签**：`A -->|是| B` 或 `A -- 是 --> B`
+After a successful call, tell the user the diagram has been shown in a new editor tab.
 
-完整语法参考（14种形状 + 8种边样式 + 转义规则 + 长度变体）见 **`references/mermaid-syntax.md`**。
+When `create_view` fails with parse errors, fix the Mermaid code and retry once. If it still fails, show the specific error to the user.
 
-## 错误处理
+### Scenario 3: manage tabs (list_views)
 
-### get_input 失败
-- 服务不可用：提示"编辑器服务未启动，请先启动 mermaid 编辑器服务"
-- 画布为空（`status: 'empty'`）：提示"画布为空，请先在编辑器中绘制流程图"
-- 已消费（`status: 'already_consumed'`）：提示"画布内容已被消费，请点击'重新启用'或编辑画布后再次询问"
+Call `list_views` when:
 
-### create_view 失败
-- 解析错误：修正 mermaid 代码后重试（最多1次），仍失败则展示具体解析错误信息
-- 服务不可用：提示"编辑器服务未启动，请先启动 mermaid 编辑器服务"
+- The user asks "有哪些视图", "列出标签页", "有什么图".
+- The user wants to read a historical view by title or index.
+- The user wants to know which tab is active.
 
-### 避免无限循环
-- `get_input` 返回 `status: 'already_consumed'` 后，不要重复调用，直接提示用户
-- `create_view` 解析失败最多重试1次，仍失败则展示错误信息
+### When not to call any tool
 
-## 消费状态机制
+- The user only asks Mermaid syntax questions → answer directly.
+- The user wants a simple 2-step flow → describe it in text.
+- A simple flowchart (<5 nodes) and the user only needs to view it → output a Mermaid code block.
 
-- AI 调用 `get_input` 成功后，画布标记为"已消费"
-- 用户编辑画布后，自动重置为"待消费"（AI 可再次读取）
-- 用户点击"重新启用"按钮，手动重置为"待消费"
-- AI 调用 `create_view` 后，画布标记为"已消费"（AI生成内容无需再被读取）
+## Consumption State Machine
 
-## 主动调用
+The canvas has a consumed state that controls whether `get_input` can read it:
 
-用户输入 `/mermaid2aichat` 时，默认调用 `get_input` 读取画布（get_input 是核心功能）。
+- `CONSUME`: after AI successfully calls `get_input`, the active tab is marked consumed.
+- `RESET`: the user clicks "重新启用" to make the canvas readable again.
+- `CANVAS_EDIT`: any user edit resets the tab to unread and sets `canvasSource` to `user`.
+- `CREATE_VIEW`: after AI calls `create_view`, the new tab is marked consumed with `canvasSource` set to `ai`.
+
+Do not repeatedly call `get_input` after `already_consumed`; prompt the user to re-enable or edit instead.
+
+## Mermaid Code Guidelines
+
+### Core rules (always follow)
+
+1. Generate syntactically valid Mermaid code.
+2. For flowcharts, use the `flowchart` keyword (not `graph`).
+3. Declare direction for flowcharts: `flowchart TD` or `flowchart LR`.
+4. Use short node IDs for flowcharts (A, B, C, or meaningful short names).
+5. Wrap node text in shape syntax: `A[开始]`.
+
+### Supported flowchart shapes and edges
+
+The editor supports 16 core flowchart shapes and 16 edge styles. See **`references/mermaid-syntax.md`** for the full table.
+
+### Sequence diagram basics
+
+`create_view` accepts `sequenceDiagram`. Example:
+
+```mermaid
+sequenceDiagram
+    participant A as 客户端
+    participant B as 服务端
+    A->>B: 请求
+    B-->>A: 响应
+```
+
+## Error Handling
+
+### get_input errors
+
+- Service unavailable: tell the user to start the Mermaid editor service with `pnpm dev`.
+- `status: 'empty'`: tell the user to draw a flowchart first.
+- `status: 'already_consumed'`: tell the user to click "重新启用" or edit the canvas.
+- `status: 'ai_content'`: tell the user the canvas is AI-generated; edit before analysis.
+- Unsupported diagram type: tell the user `get_input` currently only supports flowchart canvas reading.
+
+### create_view errors
+
+- Parse error: fix the Mermaid code and retry once. If it still fails, show the exact error.
+- Service unavailable: tell the user to start the service with `pnpm dev`.
+
+### Avoid infinite loops
+
+- Do not retry `get_input` after `already_consumed`.
+- Retry `create_view` at most once.
 
 ## Additional Resources
 
 ### Reference Files
 
-For detailed mermaid syntax reference, consult:
-- **`references/mermaid-syntax.md`** - 完整的14种节点形状、8种边样式、转义规则、长度变体
+- **`references/mermaid-syntax.md`** — complete flowchart shape/edge reference, sequence diagram basics, escape rules, and unsupported syntax list.
 
 ### Example Files
 
-Working examples in:
-- **`references/examples.md`** - 9个场景示例（用户画图分析、AI展示、空画布处理、已消费处理、编辑后重读、解析失败重试、主动调用、直接输出代码块、服务不可用）
+- **`references/examples.md`** — usage examples covering user drawing analysis, AI showing diagrams, sequence diagrams, empty canvas, consumed state, tab listing, retry logic, and service unavailable.
 
-## 技能协作接口
+## Skill Collaboration Interface
 
-### 定位
+### Positioning
 
-Mermaid2AIChat 的 AI 侧入口。连接用户可视化编辑器与 AI 对话，通过 MCP 协议消除"编辑器↔AI对话"的复制粘贴割裂感。
+AI-side entry point for the Mermaid reverse editor. Connects the visual editor with AI conversation through MCP, eliminating the copy-paste gap between editor and chat.
 
-### 触发条件
+### Triggers
 
-| 触发场景 | 说明 |
-|----------|------|
-| 用户画图求分析 | 用户在编辑器绘制流程图后要求 AI 分析 |
-| AI 展示流程 | AI 生成 mermaid 代码并展示到可编辑画布 |
-| 主动调用 | 用户输入 `/mermaid2aichat` 默认读图 |
+| Scenario | Description |
+|----------|-------------|
+| User draws and asks for analysis | User draws a flowchart in the editor and asks AI to read it |
+| AI shows a diagram | AI generates Mermaid code and pushes it to a new editor tab |
+| Tab management | User asks about open views or wants to read a historical tab |
+| Slash command | User types `/mermaid2aichat` → default to `get_input` |
 
-### 依赖
+### Dependencies
 
-| 依赖 | 说明 |
-|------|------|
-| MCP 服务端 `mermaid2aichat` | 提供 `get_input` 和 `create_view` 工具 |
-| 可视化编辑器 | Web 编辑器或 VSCode 插件，用户绘制流程图的界面 |
+| Dependency | Description |
+|------------|-------------|
+| MCP server `mermaid2aichat` | Provides `get_input`, `create_view`, and `list_views` |
+| Visual editor | Web editor or VS Code extension where the user draws |
 
-### 输出产物
+### Outputs
 
-| 输出 | 说明 |
-|------|------|
-| 流程图分析 | 基于 `get_input` 读取的 mermaid 代码进行分析回答 |
-| 画布展示 | 通过 `create_view` 将 mermaid 代码推送到编辑器画布 |
+| Output | Description |
+|--------|-------------|
+| Flowchart analysis | Based on `get_input` Mermaid code |
+| New editor tab | Created by `create_view` with rendered diagram |
+| View list | Returned by `list_views` for tab management |

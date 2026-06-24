@@ -537,6 +537,117 @@ describe('applyIncrementalChanges - 回退逻辑', () => {
     expect(result).toContain('flowchart TD');
   });
 
+  it('Bug7: 删除 subgraph → 完整移除 subgraph ... end 块，不残留 end', () => {
+    const code = `flowchart TD
+    subgraph sg1[SubGraph]
+      A[Hello]
+      B[World]
+    end
+    C[Top]`;
+    const prev = parse(code);
+    const curr = cloneCanvas(prev);
+    // 删除子图及其所有子节点（模拟真实删除行为）
+    removeNode(curr, 'sg1');
+    removeNode(curr, 'A');
+    removeNode(curr, 'B');
+
+    const result = applyIncrementalChanges(code, curr, prev);
+    expect(result).not.toBeNull();
+    expect(result).not.toContain('subgraph sg1');
+    expect(result).not.toContain(/\bend\b/); // 不应残留任何 end
+    expect(result).toContain('C[Top]');
+    expect(result).toContain('flowchart TD');
+
+    // 重新解析结果，不应出现 got 'end' 错误
+    const reparsed = parseFlowchartCode(result!);
+    expect(reparsed.success).toBe(true);
+  });
+
+  it('Bug7: 删除嵌套 subgraph → 仅移除目标子图块，保留外层结构', () => {
+    const code = `flowchart TD
+    subgraph outer[Outer]
+      subgraph inner[Inner]
+        A[Hello]
+      end
+      B[World]
+    end
+    C[Top]`;
+    const prev = parse(code);
+    const curr = cloneCanvas(prev);
+    // 删除内层子图及其子节点
+    removeNode(curr, 'inner');
+    removeNode(curr, 'A');
+
+    const result = applyIncrementalChanges(code, curr, prev);
+    expect(result).not.toBeNull();
+    expect(result).not.toContain('subgraph inner');
+    expect(result).toContain('subgraph outer');
+    expect(result).toContain('B[World]');
+    expect(result).toContain('C[Top]');
+
+    // 重新解析结果，不应出现 got 'end' 错误
+    const reparsed = parseFlowchartCode(result!);
+    expect(reparsed.success).toBe(true);
+  });
+
+  it('Bug7: 先删除子图前普通节点、再删除子图 → 仍能正确定位 subgraph 块', () => {
+    const code = `flowchart TD
+    A[Hello]
+    subgraph sg[SubGraph]
+      B[World]
+    end
+    C[Top]`;
+    // 第一次增量：删除 A
+    const firstPrev = parse(code);
+    const firstCurr = cloneCanvas(firstPrev);
+    removeNode(firstCurr, 'A');
+    const firstResult = applyIncrementalChanges(code, firstCurr, firstPrev);
+    expect(firstResult).not.toBeNull();
+
+    // 第二次增量：在上次结果基础上删除子图 sg
+    const secondPrev = parse(firstResult!);
+    const secondCurr = cloneCanvas(secondPrev);
+    removeNode(secondCurr, 'sg');
+    removeNode(secondCurr, 'B');
+    const secondResult = applyIncrementalChanges(firstResult!, secondCurr, secondPrev);
+    expect(secondResult).not.toBeNull();
+    expect(secondResult).not.toContain('subgraph sg');
+    expect(secondResult).not.toContain(/\bend\b/);
+    expect(secondResult).toContain('C[Top]');
+
+    const reparsed = parseFlowchartCode(secondResult!);
+    expect(reparsed.success).toBe(true);
+  });
+
+  it('Bug7: 画布连续操作场景下删除子图 → _sourceLine 可能已过时，应通过 ID 定位 subgraph 块', () => {
+    const originalCode = `flowchart TD
+    A[Hello]
+    subgraph sg[SubGraph]
+      B[World]
+    end
+    C[Top]`;
+    const codeAfterDeleteA = `flowchart TD
+    subgraph sg[SubGraph]
+      B[World]
+    end
+    C[Top]`;
+
+    // 模拟真实画布操作：_sourceLine 仍来自原始解析，但 rawCode 已更新
+    const prev = parse(originalCode);
+    const curr = cloneCanvas(prev);
+    removeNode(curr, 'sg');
+    removeNode(curr, 'B');
+
+    const result = applyIncrementalChanges(codeAfterDeleteA, curr, prev);
+    expect(result).not.toBeNull();
+    expect(result).not.toContain('subgraph sg');
+    expect(result).not.toContain(/\bend\b/);
+    expect(result).toContain('C[Top]');
+
+    const reparsed = parseFlowchartCode(result!);
+    expect(reparsed.success).toBe(true);
+  });
+
   it('无 rawCode 时仍可尝试增量（基于传入的 rawCode 参数）', () => {
     const code = `flowchart TD
     A[Hello]`;
@@ -643,5 +754,141 @@ describe('_sourceLine 推断', () => {
     const line = (nodeA?.data as Record<string, unknown>)._sourceLine;
     // A 在第 3 行（0-based 2），跳过注释行
     expect(line).toBe(2);
+  });
+});
+
+// ============================================================
+// 8. Bug9: 删除边/节点时保留幸存顶点定义
+// ============================================================
+
+describe('Bug9: 删除边/节点时保留幸存顶点定义', () => {
+  it('删除单边行时，target 顶点定义应保留为独立行', () => {
+    const code = `flowchart TD
+    A --> B{World}`;
+    const prev = parse(code);
+    const curr = cloneCanvas(prev);
+    removeEdge(curr, 0);
+
+    const result = applyIncrementalChanges(code, curr, prev);
+    expect(result).not.toBeNull();
+    // 边符号应被删除
+    expect(result).not.toContain('-->');
+    // B 的顶点定义应保留
+    expect(result).toContain('B{World}');
+
+    // 重新解析应成功
+    const reparsed = parseFlowchartCode(result!);
+    expect(reparsed.success).toBe(true);
+    const nodeB = reparsed.canvas.nodes.find((n) => n.id === 'B');
+    expect(nodeB?.data.shape).toBe('diamond');
+    expect(nodeB?.data.label).toBe('World');
+  });
+
+  it('删除边行时，source 和 target 顶点定义都应保留', () => {
+    const code = `flowchart TD
+    A[Hello] --> B{World}`;
+    const prev = parse(code);
+    const curr = cloneCanvas(prev);
+    removeEdge(curr, 0);
+
+    const result = applyIncrementalChanges(code, curr, prev);
+    expect(result).not.toBeNull();
+    expect(result).not.toContain('-->');
+    expect(result).toContain('A[Hello]');
+    expect(result).toContain('B{World}');
+
+    const reparsed = parseFlowchartCode(result!);
+    expect(reparsed.success).toBe(true);
+  });
+
+  it('删除节点时，其关联边行中的幸存顶点定义应保留', () => {
+    const code = `flowchart TD
+    N[准备] --> O[调用验证]
+    O --> P{验证通过?}`;
+    const prev = parse(code);
+    const curr = cloneCanvas(prev);
+    // 删除 O 及其关联边
+    removeNode(curr, 'O');
+    for (let i = curr.edges.length - 1; i >= 0; i--) {
+      const e = curr.edges[i];
+      if (e.source === 'O' || e.target === 'O') {
+        curr.edges.splice(i, 1);
+      }
+    }
+
+    const result = applyIncrementalChanges(code, curr, prev);
+    expect(result).not.toBeNull();
+    // O 应被删除
+    expect(result).not.toContain('O[');
+    // 与 O 关联的边应被删除
+    expect(result).not.toContain('--> O');
+    expect(result).not.toContain('O -->');
+    // P 的顶点定义应作为独立行保留
+    expect(result).toContain('P{验证通过?}');
+
+    const reparsed = parseFlowchartCode(result!);
+    expect(reparsed.success).toBe(true);
+    const nodeP = reparsed.canvas.nodes.find((n) => n.id === 'P');
+    expect(nodeP).toBeDefined();
+    expect(nodeP?.data.shape).toBe('diamond');
+  });
+
+  it('删除子图内节点时，子图内幸存顶点定义应保留', () => {
+    const code = `flowchart TB
+    subgraph Validate
+        N[准备] --> O[调用验证]
+        O --> P{验证通过?}
+    end`;
+    const prev = parse(code);
+    const curr = cloneCanvas(prev);
+    removeNode(curr, 'O');
+    for (let i = curr.edges.length - 1; i >= 0; i--) {
+      const e = curr.edges[i];
+      if (e.source === 'O' || e.target === 'O') {
+        curr.edges.splice(i, 1);
+      }
+    }
+
+    const result = applyIncrementalChanges(code, curr, prev);
+    expect(result).not.toBeNull();
+    expect(result).not.toContain('O[');
+    expect(result).toContain('subgraph Validate');
+    expect(result).toContain('P{验证通过?}');
+    expect(result).toContain('end');
+
+    const reparsed = parseFlowchartCode(result!);
+    expect(reparsed.success).toBe(true);
+  });
+
+  it('连续删除后，幸存顶点的 _sourceLine 应指向新位置', () => {
+    const code = `flowchart TD
+    A[Hello] --> B{World}
+    B --> C[Done]`;
+    const prev = parse(code);
+
+    // 第一次删除：移除 B --> C
+    const curr1 = cloneCanvas(prev);
+    const edgeIdx1 = curr1.edges.findIndex((e) => e.source === 'B' && e.target === 'C');
+    removeEdge(curr1, edgeIdx1);
+
+    const result1 = applyIncrementalChanges(code, curr1, prev);
+    expect(result1).not.toBeNull();
+    expect(result1).toContain('C[Done]');
+
+    // 第二次删除：移除 A --> B
+    const prev2 = parse(result1!);
+    const curr2 = cloneCanvas(prev2);
+    const edgeIdx2 = curr2.edges.findIndex((e) => e.source === 'A' && e.target === 'B');
+    removeEdge(curr2, edgeIdx2);
+
+    const result2 = applyIncrementalChanges(result1!, curr2, prev2);
+    expect(result2).not.toBeNull();
+    expect(result2).toContain('A[Hello]');
+    expect(result2).toContain('B{World}');
+    expect(result2).toContain('C[Done]');
+    expect(result2).not.toContain('-->');
+
+    const reparsed = parseFlowchartCode(result2!);
+    expect(reparsed.success).toBe(true);
   });
 });

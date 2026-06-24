@@ -1,90 +1,141 @@
-# Mermaid Flowchart 语法参考
+# Mermaid Syntax Reference
 
-本文件提供 Mermaid Flowchart 的完整语法参考，供 `get_input` 分析和 `create_view` 生成时查阅。
+Reference for `get_input` analysis and `create_view` generation. The editor supports multiple diagram types; flowcharts are the only type readable by `get_input`.
 
-## 节点形状（14种）
+## Flowchart Core Shapes (16)
 
-### 基础形状（10种）
+| Shape | Syntax | Example | Note |
+|-------|--------|---------|------|
+| Rect | `[文本]` | `A[开始]` | Default process step |
+| Rounded | `(文本)` | `B(处理)` | Rounded rectangle |
+| Stadium | `([文本])` | `C([开始])` | Stadium/pill shape |
+| Ellipse | `(-文本-)` | `D(-椭圆-)` | Ellipse |
+| Subroutine | `[[文本]]` | `E[[子程序]]` | Subroutine call |
+| Cylinder | `[(文本)]` | `F[(数据库)]` | Database/cylinder |
+| Circle | `((文本))` | `G((节点))` | Circle |
+| Double circle | `(((文本)))` | `H(((结束)))` | Double circle terminator |
+| Diamond | `{文本}` | `I{判断}` | Decision/branch |
+| Hexagon | `{{文本}}` | `J{{准备}}` | Preparation |
+| Odd / asymmetric | `>文本]` | `K>旗帜]` | Flag/asymmetric |
+| Trapezoid | `[/文本/]` | `L[/梯形/]` | Trapezoid |
+| Trapezoid reverse | `[\文本\]` | `M[\倒梯形\]` | Reverse trapezoid |
+| Lean right | `[/文本\]` | `N[/右倾\]` | Right-leaning parallelogram |
+| Lean left | `[\文本/]` | `O[\左倾/]` | Left-leaning parallelogram |
+| Rect with prop | `[\|field:value\|文本]` | `P[\|x:1\|带属性]` | Property-bearing rectangle |
 
-| 形状 | 语法 | 示例 | 用途 |
-|------|------|------|------|
-| 矩形 | `[文本]` | `A[开始]` | 默认流程步骤 |
-| 圆角 | `(文本)` | `B(处理)` | 普通处理步骤 |
-| 体育场 | `([文本])` | `C([开始])` | 起止节点 |
-| 菱形 | `{文本}` | `D{判断}` | 判断/分支 |
-| 圆形 | `((文本))` | `E((节点))` | 连接点 |
-| 圆柱 | `[(文本)]` | `F[(数据库)]` | 数据存储 |
-| 六边形 | `{{文本}}` | `G{{步骤}}` | 准备步骤 |
-| 平行四边形 | `[/文本/]` | `H[/输入/]` | 输入/输出 |
-| 子程序 | `[[文本]]` | `I[[子程序]]` | 子流程 |
-| 双圆 | `(((文本)))` | `J(((结束)))` | 终止节点 |
+Additional shapes are available through `@{shape: xxx}` metadata in the parser, but the 16 core shapes above are guaranteed to render correctly in the editor.
 
-### 扩展形状（4种）
+## Flowchart Edge Styles (16)
 
-| 形状 | 语法 | 示例 | 用途 |
-|------|------|------|------|
-| 不对称 | `>文本]` | `K>旗帜]` | 旗帜/标注 |
-| 反向平行四边形 | `[\文本\]` | `L[\输出\]` | 反向输入/输出 |
-| 梯形 | `[/文本\]` | `M[/梯形\]` | 梯形节点 |
-| 反向梯形 | `[\文本/]` | `N[\反向梯形/]` | 反向梯形节点 |
+| Style | Syntax | Example |
+|-------|--------|---------|
+| Line | `---` | `A --- B` |
+| Arrow | `-->` | `A --> B` |
+| Cross | `--x` | `A --x B` |
+| Circle | `--o` | `A --o B` |
+| Thick line | `===` | `A === B` |
+| Thick arrow | `==>` | `A ==> B` |
+| Thick cross | `==x` | `A ==x B` |
+| Thick circle | `==o` | `A ==o B` |
+| Dotted | `-.-` | `A -.- B` |
+| Dotted arrow | `-.->` | `A -.-> B` |
+| Dotted cross | `-.x` | `A -.x B` |
+| Dotted circle | `-.o` | `A -.o B` |
+| Bidirectional arrow | `<-->` | `A <--> B` |
+| Bidirectional cross | `x--x` | `A x--x B` |
+| Bidirectional circle | `o--o` | `A o--o B` |
+| Invisible | `~~~` | `A ~~~ B` |
 
-## 边样式（8种）
+### Edge Labels
 
-| 样式 | 语法 | 示例 | 说明 |
-|------|------|------|------|
-| 箭头 | `-->` | `A --> B` | 标准实线箭头 |
-| 直线 | `---` | `A --- B` | 实线无箭头 |
-| 虚线 | `-.-` | `A -.- B` | 虚线无箭头 |
-| 虚线箭头 | `-.->` | `A -.-> B` | 虚线带箭头 |
-| 粗线箭头 | `==>` | `A ==> B` | 粗线带箭头 |
-| 圆形端点 | `---o` | `A ---o B` | 圆形端点边 |
-| 交叉端点 | `---x` | `A ---x B` | 交叉端点边 |
-| 双向箭头 | `<--->` | `A <---> B` | 双向箭头 |
+Two equivalent forms:
 
-### 边标签
-
-两种语法等价：
-
-```
+```mermaid
 A -->|是| B
 A -- 是 --> B
 ```
 
-### 边长度变体
+### Edge Length
 
-通过增加 `-` 的数量控制边长度（影响布局间距）：
+Increase `-` count to influence layout spacing:
 
-| 长度 | 箭头 | 直线 |
-|------|------|------|
+| Length | Arrow | Line |
+|--------|-------|------|
 | 1 | `-->` | `---` |
 | 2 | `--->` | `----` |
 | 3 | `---->` | `-----` |
 
-## 方向声明
+## Flowchart Direction
 
-| 关键字 | 方向 |
-|--------|------|
-| `TB` | 从上到下 |
-| `TD` | 从上到下（同 TB） |
-| `BT` | 从下到上 |
-| `LR` | 从左到右 |
-| `RL` | 从右到左 |
+| Keyword | Direction |
+|---------|-----------|
+| `TB` | Top to bottom |
+| `TD` | Top to down (same as TB) |
+| `BT` | Bottom to top |
+| `LR` | Left to right |
+| `RL` | Right to left |
 
-## 代码规范
+## Sequence Diagram Basics
 
-### 必须遵守
+`create_view` supports `sequenceDiagram`. `get_input` does **not** read sequence diagrams back.
 
-1. 使用 `flowchart` 关键字（非 `graph`）
-2. 声明方向：`flowchart TD` 或 `flowchart LR`
-3. 节点 ID 使用短 ID（A, B, C...）
-4. 节点文本用形状语法包裹：`A[开始]` 而非 `A`
+### Participants
 
-### 标签转义
+```mermaid
+sequenceDiagram
+    participant A as 客户端
+    participant B as 服务端
+```
 
-标签中包含特殊字符时需转义：
+### Common Arrows
 
-| 字符 | 转义 |
-|------|------|
+| Arrow | Syntax | Meaning |
+|-------|--------|---------|
+| Solid filled | `->>` | `A->>B: msg` |
+| Dotted filled | `-->>` | `A-->>B: msg` |
+| Solid open | `->` | `A->B: msg` |
+| Dotted open | `-->` | `A-->B: msg` |
+| Solid cross | `-x` | `A-xB: msg` |
+| Dotted cross | `--x` | `A--xB: msg` |
+
+### Activation Bars
+
+```mermaid
+sequenceDiagram
+    A->>+B: call
+    B-->>-A: return
+```
+
+### Blocks
+
+```mermaid
+sequenceDiagram
+    A->>B: request
+    alt success
+        B-->>A: ok
+    else failure
+        B-->>A: error
+    end
+```
+
+Supported block types: `alt`, `opt`, `loop`, `par`, `critical`, `break`, `rect`.
+
+## Code Rules
+
+### Always follow
+
+1. Use valid Mermaid syntax.
+2. For flowcharts, use the `flowchart` keyword (not `graph`).
+3. Declare direction for flowcharts: `flowchart TD` or `flowchart LR`.
+4. Use short node IDs for flowcharts (A, B, C, or meaningful short names).
+5. Wrap node text in shape syntax: `A[开始]` instead of bare `A`.
+
+### Escape Rules
+
+Escape these characters inside labels:
+
+| Character | Escape |
+|-----------|--------|
 | `\` | `\\` |
 | `"` | `\"` |
 | `[` | `\[` |
@@ -93,29 +144,31 @@ A -- 是 --> B
 | `}` | `\}` |
 | `(` | `\(` |
 | `)` | `\)` |
-| `\|` | `\|`（边标签中） |
+| `\|` | `\|` (in edge labels) |
 
-### 注意事项
+### Caveats
 
-1. **节点首字母限制**：节点 ID 首字母为 `o` 或 `x` 时需加空格或大写，否则被解析为圆形/交叉端点
-2. **`end` 关键字**：节点文本中避免使用小写 `end`，需大写或部分大写
-3. **边文本格式**：边文本可用 `-- text -->` 或 `-->|text|` 两种语法
+1. Node IDs starting with `o` or `x` may be parsed as circle/cross endpoints; use uppercase or add a space.
+2. Avoid lowercase `end` as node text; uppercase or partially uppercase it.
+3. Inline links like `[text](url)` are not supported; put URLs as plain text.
 
-## 不支持的语法
+## Unsupported Syntax
 
-本编辑器仅支持 `flowchart` 类型，以下语法不支持（避免使用）：
+The editor does not support the following features. Avoid them in generated code.
 
-| 不支持的语法 | 说明 | 替代方案 |
-|-------------|------|---------|
-| 非 flowchart 类型 | `sequenceDiagram`、`classDiagram`、`stateDiagram`、`erDiagram`、`gantt` 等 | 仅使用 `flowchart TD/LR` |
-| 复杂子图嵌套 | `subgraph` 嵌套超过 2 层 | 拆分为多个独立流程图，或扁平化至 1 层 |
-| 自定义 CSS 样式 | `classDef`、`style`、`linkStyle` 等样式定义 | 使用节点形状和边样式表达语义，不依赖颜色/样式 |
-| Markdown 链接 | `[文本](url)` 语法 | 将链接作为纯文本放入节点标签 |
-| 交互式点击 | `click` 回调定义 | 不支持，节点仅用于展示 |
+| Unsupported | Reason | Alternative |
+|-------------|--------|-------------|
+| Click callbacks | `click` event handlers | Use labels or external documentation |
+| Markdown links inside nodes | `[text](url)` | Plain text URL |
+| Complex nested subgraphs | >2 levels of `subgraph` nesting | Flatten or split into separate diagrams |
 
-## 完整示例
+Note: non-flowchart diagram types (`sequenceDiagram`, `classDiagram`, etc.) are **supported by `create_view`** but cannot be read back by `get_input`.
 
-```
+## Full Examples
+
+### Flowchart
+
+```mermaid
 flowchart TD
     A[用户访问] --> B{已登录?}
     B -->|是| C[进入首页]
@@ -125,4 +178,17 @@ flowchart TD
     F -->|是| C
     F -->|否| D
     C --> G(((结束)))
+```
+
+### Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant C as 客户端
+    participant G as API网关
+    participant S as 服务
+    C->>G: 发起请求
+    G->>S: 转发请求
+    S-->>G: 返回结果
+    G-->>C: 响应客户端
 ```

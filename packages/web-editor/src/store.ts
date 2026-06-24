@@ -100,7 +100,7 @@ interface ClientEditorStore {
   // === 读取 ===
   getActiveCanvas: () => CanvasState;
   /** 读取图结构类型快照（仅图结构类型有效） */
-  getCanvas: () => { nodes: MermaidNode[]; edges: MermaidEdge[]; direction: FlowchartDirection };
+  getCanvas: () => { nodes: MermaidNode[]; edges: MermaidEdge[]; direction: FlowchartDirection; rawCode?: string };
 
   // === 重置消费状态（触发 WebSocket） ===
   resetConsumed: () => void;
@@ -246,7 +246,8 @@ export const useEditorStore = create<ClientEditorStore>((set, get) => ({
 
   getCanvas: () => {
     const s = get();
-    return { nodes: s.nodes, edges: s.edges, direction: s.direction };
+    const rawCode = isGraphCanvasState(s.activeCanvas) ? s.activeCanvas.rawCode : undefined;
+    return { nodes: s.nodes, edges: s.edges, direction: s.direction, ...(rawCode !== undefined ? { rawCode } : {}) };
   },
 
   // 重置消费状态

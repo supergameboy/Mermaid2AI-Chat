@@ -10,6 +10,7 @@
  */
 
 import { memo } from 'react';
+import type { CSSProperties } from 'react';
 import type { MermaidShapeType, NodeStyle } from '@mermaid2aichat/serializer';
 import {
   getShapeDefinition,
@@ -163,6 +164,8 @@ export const ShapeRenderer = memo(function ShapeRenderer({
   const firstLine = lines[0] ?? '';
   const restLines = lines.slice(1);
   const hasIcon = faIcons.length > 0 || Boolean(img);
+  // Bug5: 将节点 style 中的任意 CSS 属性应用到标签（如 font-size、font-family 等）
+  const extraLabelStyle = nodeStyleToCss(style);
   const renderLabel = () => (
     <div
       className="mermaid-shape-label"
@@ -170,6 +173,7 @@ export const ShapeRenderer = memo(function ShapeRenderer({
         color,
         fontSize: DEFAULT_FONT_SIZE,
         lineHeight: `${DEFAULT_LINE_HEIGHT}px`,
+        ...extraLabelStyle,
       }}
     >
       {hasIcon ? (
@@ -238,6 +242,27 @@ export const ShapeRenderer = memo(function ShapeRenderer({
     </div>
   );
 });
+
+// ============================================================
+// 样式辅助
+// ============================================================
+
+/**
+ * 将 NodeStyle 中的非 path 样式属性转换为 React CSSProperties
+ * - 保留 fill/stroke/strokeWidth/color 之外的所有原始 CSS 属性
+ * - 将连字符命名（如 font-size）转换为驼峰命名（fontSize）
+ */
+function nodeStyleToCss(style: NodeStyle | undefined): CSSProperties | undefined {
+  if (!style) return undefined;
+  const { fill, stroke, strokeWidth, color, ...rest } = style;
+  const css: CSSProperties = {};
+  for (const [key, value] of Object.entries(rest)) {
+    if (value === undefined) continue;
+    const reactKey = key.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+    (css as Record<string, unknown>)[reactKey] = value;
+  }
+  return Object.keys(css).length > 0 ? css : undefined;
+}
 
 // ============================================================
 // 装饰元素渲染

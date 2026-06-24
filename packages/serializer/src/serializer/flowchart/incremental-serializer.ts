@@ -219,6 +219,7 @@ export function applyIncrementalChanges(
     }
 
     const line = lines[sourceLine];
+    const indent = line.match(/^(\s*)/)?.[1] ?? '';
     const vertexIds = extractVertexDefinitionIds(line);
     const replacements: Array<{ nodeId: string; code: string }> = [];
     for (const nodeId of vertexIds) {
@@ -234,7 +235,8 @@ export function applyIncrementalChanges(
         nodeSourceLine === sourceLine ||
         (nodeSourceLine === undefined && lineContainsVertexDefinition(line, nodeId));
       if (!isDefinitionLine) continue;
-      replacements.push({ nodeId, code: serializeVertex(node) });
+      // Bug7: 保留原边行的缩进，避免破坏用户格式
+      replacements.push({ nodeId, code: `${indent}${serializeVertex(node)}` });
     }
 
     if (replacements.length > 0) {

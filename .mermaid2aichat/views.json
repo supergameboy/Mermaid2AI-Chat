@@ -5,7 +5,7 @@
       "id": "73b6524f-33c5-4e3e-bf42-c995d88fb33f",
       "title": null,
       "createdAt": 1782284534470,
-      "updatedAt": 1782307210106,
+      "updatedAt": 1782307349837,
       "sessionId": null,
       "source": "user",
       "diagramType": "flowchart",
@@ -13,51 +13,52 @@
         "diagramType": "flowchart",
         "nodes": [
           {
-            "id": "subgraph_1782307204666",
+            "id": "subgraph_1782306896445",
             "type": "subgraph",
             "position": {
-              "x": 284.9441134243033,
-              "y": 52.163553939916994
+              "x": 15,
+              "y": 20
             },
             "data": {
               "label": "新子图",
               "shape": "rect",
               "isSubgraph": true,
-              "subgraphNodes": []
+              "subgraphNodes": [
+                "node_1782306894700_0"
+              ],
+              "_sourceLine": 3
             },
             "width": 200,
             "height": 196,
             "measured": {
               "width": 200,
               "height": 196
-            },
-            "selected": false,
-            "dragging": false
+            }
           },
           {
-            "id": "node_1782307201233_0",
-            "type": "rect",
+            "id": "node_1782306894700_0",
+            "type": "default",
             "position": {
               "x": 45,
               "y": 88
             },
             "data": {
               "label": "新节点",
-              "shape": "rect"
+              "shape": "rect",
+              "_sourceLine": 4
             },
+            "parentId": "subgraph_1782306896445",
             "width": 108,
             "height": 48,
             "measured": {
               "width": 108,
               "height": 48
             },
-            "selected": true,
-            "dragging": true,
-            "parentId": "subgraph_1782307204666"
+            "selected": false
           }
         ],
         "edges": [],
-        "direction": "TB"
+        "direction": "TD"
       },
       "consumed": {
         "consumed": false,
@@ -65,9 +66,9 @@
         "canvasSource": "user"
       },
       "viewport": {
-        "x": 207.8778129038393,
-        "y": 302.7849127257485,
-        "zoom": 0.870550563296124
+        "x": 167.5,
+        "y": 356,
+        "zoom": 2
       }
     }
   ],

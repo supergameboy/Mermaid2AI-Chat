@@ -891,4 +891,29 @@ describe('Bug9: 删除边/节点时保留幸存顶点定义', () => {
     const reparsed = parseFlowchartCode(result2!);
     expect(reparsed.success).toBe(true);
   });
+
+  it('删除带缩进的边行时，幸存顶点定义应保留原缩进', () => {
+    const code = `flowchart TB
+    subgraph Validate
+        N[准备] --> O[调用验证]
+        O --> P{验证通过?}
+    end`;
+    const prev = parse(code);
+    const curr = cloneCanvas(prev);
+    removeNode(curr, 'O');
+    for (let i = curr.edges.length - 1; i >= 0; i--) {
+      const e = curr.edges[i];
+      if (e.source === 'O' || e.target === 'O') {
+        curr.edges.splice(i, 1);
+      }
+    }
+
+    const result = applyIncrementalChanges(code, curr, prev);
+    expect(result).not.toBeNull();
+    // P 的顶点定义应保留 8 空格缩进（与原边行一致）
+    expect(result).toContain('        P{验证通过?}');
+
+    const reparsed = parseFlowchartCode(result!);
+    expect(reparsed.success).toBe(true);
+  });
 });

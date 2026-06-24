@@ -19,13 +19,15 @@
  * 支持的 13 种曲线类型（对齐官方 edges.js interpolate）:
  *   basis/cardinal/step/stepAfter/stepBefore/monotoneX/monotoneY/natural/linear/bumpX/bumpY/catmullRom/rounded
  */
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import {
   BaseEdge,
   EdgeLabelRenderer,
   getBezierPath,
   getSmoothStepPath,
   getStraightPath,
+  Position,
+  useReactFlow,
   type EdgeProps,
 } from '@xyflow/react';
 import type { MermaidEdgeData, MermaidEdgeStyle } from '@mermaid2aichat/serializer';
@@ -122,6 +124,8 @@ function getCurvePath(
  */
 export const FlowchartEdgeComponent = memo(function FlowchartEdgeComponent({
   id,
+  source,
+  target,
   sourceX,
   sourceY,
   sourcePosition,
@@ -134,6 +138,71 @@ export const FlowchartEdgeComponent = memo(function FlowchartEdgeComponent({
   const edgeData = data as MermaidEdgeData | undefined;
   const edgeStyle: MermaidEdgeStyle = edgeData?.edgeStyle ?? 'arrow';
   const config = getEdgeStyleConfig(edgeStyle);
+
+  // 并行边偏移 — 避免多条边从同一源/到同一目标时形成8字形交叉
+  // 注意：hook 必须在 early return 之前调用（Rules of Hooks）
+  const { getEdges } = useReactFlow();
+  const { adjustedSourceX, adjustedSourceY, adjustedTargetX, adjustedTargetY, flippedSourcePosition, flippedTargetPosition } = useMemo(() => {
+    const allEdges = getEdges();
+
+    // 同源边：共享相同 source 的边，按 (target, id) 排序确保确定性
+    const sameSourceEdges = allEdges
+      .filter(e => e.source === source)
+      .sort((a, b) => a.target.localeCompare(b.target) || a.id.localeCompare(b.id));
+
+    // 同目标边：共享相同 target 的边，按 (source, id) 排序确保确定性
+    const sameTargetEdges = allEdges
+      .filter(e => e.target === target)
+      .sort((a, b) => a.source.localeCompare(b.source) || a.id.localeCompare(b.id));
+
+    // 双向边检测：A→B 和 B→A 同时存在时，形成8字形交叉
+    const reverseEdge = allEdges.find(e =>
+      e.id !== id && e.source === target && e.target === source
+    );
+    const hasReverseEdge = reverseEdge !== undefined;
+
+    const PARALLEL_EDGE_SPACING = 20;
+
+    // 源端偏移：在同源边中的对称偏移
+    let sourceOffset = 0;
+    if (sameSourceEdges.length > 1) {
+      const idx = sameSourceEdges.findIndex(e => e.id === id);
+      if (idx !== -1) {
+        sourceOffset = (idx - (sameSourceEdges.length - 1) / 2) * PARALLEL_EDGE_SPACING;
+      }
+    }
+
+    // 目标端偏移：在同目标边中的对称偏移
+    let targetOffset = 0;
+    if (sameTargetEdges.length > 1) {
+      const idx = sameTargetEdges.findIndex(e => e.id === id);
+      if (idx !== -1) {
+        targetOffset = (idx - (sameTargetEdges.length - 1) / 2) * PARALLEL_EDGE_SPACING;
+      }
+    }
+
+    // 双向边处理：翻转 id 较大边的 Position，使两条边弯曲方向相反
+    // 翻转后曲线从不同方向出发，避免8字形交叉
+    let finalSourcePosition = sourcePosition;
+    let finalTargetPosition = targetPosition;
+    if (hasReverseEdge && id > reverseEdge.id) {
+      finalSourcePosition = flipPosition(sourcePosition);
+      finalTargetPosition = flipPosition(targetPosition);
+    }
+
+    // 根据翻转后的连接方向应用偏移
+    const isVerticalSource = finalSourcePosition === Position.Top || finalSourcePosition === Position.Bottom;
+    const isVerticalTarget = finalTargetPosition === Position.Top || finalTargetPosition === Position.Bottom;
+
+    return {
+      adjustedSourceX: isVerticalSource ? sourceX + sourceOffset : sourceX,
+      adjustedSourceY: isVerticalSource ? sourceY : sourceY + sourceOffset,
+      adjustedTargetX: isVerticalTarget ? targetX + targetOffset : targetX,
+      adjustedTargetY: isVerticalTarget ? targetY : targetY + targetOffset,
+      flippedSourcePosition: finalSourcePosition,
+      flippedTargetPosition: finalTargetPosition,
+    };
+  }, [getEdges, source, target, id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition]);
 
   // 不可见线 — 仅布局占位，不渲染视觉元素
   if (config.stroke === 'invisible') {
@@ -166,14 +235,14 @@ export const FlowchartEdgeComponent = memo(function FlowchartEdgeComponent({
   const markerEnd = toMarkerUrl(config.markerEnd);
   const markerStart = toMarkerUrl(config.markerStart);
 
-  // 路径（根据 interpolate 选择曲线类型）
+  // 路径（根据 interpolate 选择曲线类型，使用翻转后的 Position）
   const [edgePath, labelX, labelY] = getCurvePath(interpolate, {
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
+    sourceX: adjustedSourceX,
+    sourceY: adjustedSourceY,
+    sourcePosition: flippedSourcePosition,
+    targetX: adjustedTargetX,
+    targetY: adjustedTargetY,
+    targetPosition: flippedTargetPosition,
   });
 
   return (
@@ -221,6 +290,16 @@ export const flowchartEdgeTypes = {
 // ============================================================
 // 辅助函数
 // ============================================================
+
+/** 翻转连接点方向 — 用于双向边避免8字形交叉 */
+function flipPosition(pos: Position): Position {
+  switch (pos) {
+    case Position.Top: return Position.Bottom;
+    case Position.Bottom: return Position.Top;
+    case Position.Left: return Position.Right;
+    case Position.Right: return Position.Left;
+  }
+}
 
 /** 安全读取扩展字段 */
 function readField<T>(data: Record<string, unknown> | undefined, key: string): T | undefined {

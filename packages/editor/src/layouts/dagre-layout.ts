@@ -36,12 +36,12 @@ const RANK_SEP = 120;
 const NODE_SEP = 60;
 const SUBGRAPH_DEFAULT_WIDTH = 300;
 const SUBGRAPH_DEFAULT_HEIGHT = 200;
-const SUBGRAPH_MIN_WIDTH = 200;
-const SUBGRAPH_MIN_HEIGHT = 100;
+export const SUBGRAPH_MIN_WIDTH = 200;
+export const SUBGRAPH_MIN_HEIGHT = 100;
 /** 标题栏高度，需与 subgraph-node.tsx 保持一致 */
-const SUBGRAPH_TITLE_HEIGHT = 28;
+export const SUBGRAPH_TITLE_HEIGHT = 28;
 /** 子图内容区水平内边距（dagre 已含内部 padding，这里额外留边） */
-const SUBGRAPH_HORIZONTAL_PADDING = 16;
+export const SUBGRAPH_HORIZONTAL_PADDING = 16;
 /** 子图内容区底部垂直内边距 */
 const SUBGRAPH_VERTICAL_PADDING = 16;
 
@@ -105,11 +105,16 @@ export function layoutWithDagre(
   dagre.layout(g);
 
   // 1. 收集 dagre 输出的绝对位置（节点中心 → 左上角）
+  // Bug2 修复：对 subgraph 节点使用 dagre 输出尺寸（dagre compound 模式会自动扩展父节点尺寸以包含所有子节点），
+  // 而非输入尺寸（默认 300x200），确保一次布局即得到正确的子节点相对位置和 subgraph 包围盒
   const absolutePositions = new Map<string, { x: number; y: number }>();
   for (const node of nodes) {
     const dagreNode = g.node(node.id);
     if (!dagreNode) continue;
-    const { width, height } = getNodeSize(node);
+    // subgraph 节点使用 dagre 计算的真实尺寸，普通节点使用输入尺寸
+    const nodeIsSubgraph = isSubgraph(node);
+    const width = nodeIsSubgraph ? dagreNode.width : getNodeSize(node).width;
+    const height = nodeIsSubgraph ? dagreNode.height : getNodeSize(node).height;
     absolutePositions.set(node.id, {
       x: dagreNode.x - width / 2,
       y: dagreNode.y - height / 2,
@@ -132,15 +137,37 @@ export function layoutWithDagre(
     }
   }
 
-  // 3. 计算子图真实尺寸：优先使用 dagre 计算的 cluster 尺寸
-  const subgraphSizeMap = new Map<string, { width: number; height: number }>();
+  // 3. 计算子图真实尺寸：递归包含所有后代节点
+  // 构建 parentId → 直接子节点 映射
+  const childrenMap = new Map<string, MermaidNode[]>();
   for (const node of nodes) {
-    if (!isSubgraph(node)) continue;
+    if (!node.parentId) continue;
+    const siblings = childrenMap.get(node.parentId) ?? [];
+    siblings.push(node);
+    childrenMap.set(node.parentId, siblings);
+  }
+
+  // 计算子图嵌套深度，用于自底向上处理
+  function getNestingDepth(nodeId: string): number {
+    const node = nodes.find((n) => n.id === nodeId);
+    if (!node?.parentId) return 0;
+    return 1 + getNestingDepth(node.parentId);
+  }
+
+  // 收集所有子图节点，按嵌套深度降序排列（最深优先，保证内层先计算）
+  const subgraphNodes = nodes.filter(isSubgraph);
+  subgraphNodes.sort((a, b) => getNestingDepth(b.id) - getNestingDepth(a.id));
+
+  const subgraphSizeMap = new Map<string, { width: number; height: number }>();
+
+  for (const node of subgraphNodes) {
     const dagreNode = g.node(node.id);
     if (!dagreNode) continue;
 
-    const children = nodes.filter((n) => n.parentId === node.id);
-    if (children.length === 0) {
+    // 只遍历直接子节点（relativePositions 是相对于直接父节点的坐标）
+    // 嵌套子图的 subgraphSizeMap 已包含其自身所有后代的尺寸，无需重复遍历
+    const directChildren = childrenMap.get(node.id) ?? [];
+    if (directChildren.length === 0) {
       // 空子图使用默认尺寸
       subgraphSizeMap.set(node.id, {
         width: node.width ?? SUBGRAPH_DEFAULT_WIDTH,
@@ -149,15 +176,20 @@ export function layoutWithDagre(
       continue;
     }
 
-    // 基于子节点包围盒计算内容区尺寸
+    // 基于直接子节点包围盒计算内容区尺寸
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
-    for (const child of children) {
+
+    for (const child of directChildren) {
       const childPos = relativePositions.get(child.id);
-      const childSize = getNodeSize(child);
       if (!childPos) continue;
+
+      // 如果子节点是子图且已有计算尺寸，使用计算尺寸；否则用 getNodeSize
+      const computedSize = subgraphSizeMap.get(child.id);
+      const childSize = computedSize ?? getNodeSize(child);
+
       minX = Math.min(minX, childPos.x);
       minY = Math.min(minY, childPos.y);
       maxX = Math.max(maxX, childPos.x + childSize.width);
@@ -294,4 +326,104 @@ function readEdgeDataField<T>(edge: MermaidEdge, key: string): T | undefined {
     return undefined;
   }
   return value as T;
+}
+
+// ============================================================
+// 实时子图尺寸重计算（用户拖拽节点时调用）
+// ============================================================
+
+/**
+ * 根据子节点当前位置实时重算所有 subgraph 的尺寸
+ *
+ * 数据流:
+ *   nodes（含子节点相对位置）→ 按 parentId 分组 → 计算包围盒 → 更新 subgraph width/height
+ *
+ * 设计:
+ *   - 按嵌套深度自底向上计算（最深子图先算，外层子图包含内层子图尺寸）
+ *   - 只遍历直接子节点，嵌套子图的尺寸已计算完毕
+ *   - 子节点位置是相对于父 subgraph 的坐标（React Flow Parent Node 机制）
+ *
+ * @param nodes - 当前画布所有节点
+ * @returns 更新了 width/height 的节点数组（仅 subgraph 节点被更新）
+ */
+export function recalculateSubgraphSizes(nodes: MermaidNode[]): MermaidNode[] {
+  if (nodes.length === 0) return nodes;
+
+  // 构建 parentId → 直接子节点 映射
+  const childrenMap = new Map<string, MermaidNode[]>();
+  for (const node of nodes) {
+    if (!node.parentId) continue;
+    const siblings = childrenMap.get(node.parentId) ?? [];
+    siblings.push(node);
+    childrenMap.set(node.parentId, siblings);
+  }
+
+  // 计算子图嵌套深度
+  const nodeMap = new Map<string, MermaidNode>();
+  for (const n of nodes) nodeMap.set(n.id, n);
+
+  function getNestingDepth(nodeId: string): number {
+    const node = nodeMap.get(nodeId);
+    if (!node?.parentId) return 0;
+    return 1 + getNestingDepth(node.parentId);
+  }
+
+  // 收集所有子图节点，按嵌套深度降序排列（最深优先）
+  const subgraphNodes = nodes.filter(isSubgraph);
+  subgraphNodes.sort((a, b) => getNestingDepth(b.id) - getNestingDepth(a.id));
+
+  // 存储计算后的子图尺寸
+  const subgraphSizeMap = new Map<string, { width: number; height: number }>();
+
+  for (const subgraphNode of subgraphNodes) {
+    const directChildren = childrenMap.get(subgraphNode.id) ?? [];
+    if (directChildren.length === 0) {
+      // 空子图保持原尺寸
+      subgraphSizeMap.set(subgraphNode.id, {
+        width: subgraphNode.width ?? SUBGRAPH_DEFAULT_WIDTH,
+        height: subgraphNode.height ?? SUBGRAPH_DEFAULT_HEIGHT,
+      });
+      continue;
+    }
+
+    // 基于直接子节点包围盒计算内容区尺寸
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const child of directChildren) {
+      const childPos = child.position;
+      // 如果子节点是子图且已有计算尺寸，使用计算尺寸；否则用 node.width/height 或默认值
+      const computedSize = subgraphSizeMap.get(child.id);
+      const childSize = computedSize ?? getNodeSize(child);
+
+      minX = Math.min(minX, childPos.x);
+      minY = Math.min(minY, childPos.y);
+      maxX = Math.max(maxX, childPos.x + childSize.width);
+      maxY = Math.max(maxY, childPos.y + childSize.height);
+    }
+
+    const contentWidth = Number.isFinite(minX) ? maxX - minX : 0;
+    const contentHeight = Number.isFinite(minY) ? maxY - minY : 0;
+
+    const width = Math.max(
+      SUBGRAPH_MIN_WIDTH,
+      contentWidth + SUBGRAPH_HORIZONTAL_PADDING * 2,
+    );
+    const height = Math.max(
+      SUBGRAPH_MIN_HEIGHT,
+      contentHeight + SUBGRAPH_VERTICAL_PADDING + SUBGRAPH_TITLE_HEIGHT,
+    );
+
+    subgraphSizeMap.set(subgraphNode.id, { width, height });
+  }
+
+  // 更新节点数组中的 subgraph 尺寸
+  return nodes.map((node) => {
+    if (!isSubgraph(node)) return node;
+    const size = subgraphSizeMap.get(node.id);
+    if (!size) return node;
+    return { ...node, width: size.width, height: size.height };
+  });
 }

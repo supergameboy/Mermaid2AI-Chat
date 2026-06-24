@@ -431,6 +431,67 @@ describe('applyIncrementalChanges - 格式保留', () => {
     expect(result).toContain('a2[b]');
     expect(result).toContain('end');
   });
+
+  // Bug8: 方向变更应通过增量序列化更新 flowchart 方向行
+  it('Bug8: 方向变更 → 更新 flowchart 方向行，保留其他行格式', () => {
+    const code = `flowchart TD
+    A[Hello] --> B[World]`;
+    const prev = parse(code);
+    const curr = cloneCanvas(prev);
+    curr.direction = 'LR';
+
+    const result = applyIncrementalChanges(code, curr, prev);
+    expect(result).not.toBeNull();
+    // 方向行应更新为 LR
+    expect(result).toContain('flowchart LR');
+    expect(result).not.toContain('flowchart TD');
+    // 其他行应保留
+    expect(result).toContain('A[Hello] --> B[World]');
+  });
+
+  it('Bug8: 方向变更 TB→BT → 更新方向行', () => {
+    const code = `flowchart TB
+    A[Hello]`;
+    const prev = parse(code);
+    const curr = cloneCanvas(prev);
+    curr.direction = 'BT';
+
+    const result = applyIncrementalChanges(code, curr, prev);
+    expect(result).not.toBeNull();
+    expect(result).toContain('flowchart BT');
+    expect(result).not.toContain('flowchart TB');
+  });
+
+  it('Bug8: 方向变更保留注释和空行', () => {
+    const code = `flowchart TD
+    %% This is a comment
+
+    A[Hello]`;
+    const prev = parse(code);
+    const curr = cloneCanvas(prev);
+    curr.direction = 'RL';
+
+    const result = applyIncrementalChanges(code, curr, prev);
+    expect(result).not.toBeNull();
+    expect(result).toContain('flowchart RL');
+    // 注释和空行应保留
+    expect(result).toContain('%% This is a comment');
+    expect(result).toContain('A[Hello]');
+  });
+
+  it('Bug8: graph 关键字方向变更保留原关键字', () => {
+    const code = `graph TD
+    A[Hello]`;
+    const prev = parse(code);
+    const curr = cloneCanvas(prev);
+    curr.direction = 'LR';
+
+    const result = applyIncrementalChanges(code, curr, prev);
+    expect(result).not.toBeNull();
+    // Bug7: 保留用户原始关键字 graph，不强制改写为 flowchart
+    expect(result).toContain('graph LR');
+    expect(result).not.toContain('flowchart');
+  });
 });
 
 // ============================================================
@@ -447,7 +508,7 @@ describe('applyIncrementalChanges - 回退逻辑', () => {
     expect(result).toBeNull();
   });
 
-  it('结构级变更（节点增加）→ 返回 null（回退全量）', () => {
+  it('Bug7: 节点增加 → 增量追加顶点定义行', () => {
     const code = `flowchart TD
     A[Hello]`;
     const prev = parse(code);
@@ -455,10 +516,14 @@ describe('applyIncrementalChanges - 回退逻辑', () => {
     addNode(curr, 'B', 'World');
 
     const result = applyIncrementalChanges(code, curr, prev);
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result).toContain('A[Hello]');
+    expect(result).toContain('B[World]');
+    // 保留原始行
+    expect(result).toContain('flowchart TD');
   });
 
-  it('结构级变更（边删除）→ 返回 null（回退全量）', () => {
+  it('Bug7: 边删除 → 增量删除边定义行', () => {
     const code = `flowchart TD
     A[Hello] --> B[World]`;
     const prev = parse(code);
@@ -466,7 +531,10 @@ describe('applyIncrementalChanges - 回退逻辑', () => {
     removeEdge(curr, 0);
 
     const result = applyIncrementalChanges(code, curr, prev);
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    // 边定义行被删除，但顶点定义保留
+    expect(result).not.toContain('-->');
+    expect(result).toContain('flowchart TD');
   });
 
   it('无 rawCode 时仍可尝试增量（基于传入的 rawCode 参数）', () => {

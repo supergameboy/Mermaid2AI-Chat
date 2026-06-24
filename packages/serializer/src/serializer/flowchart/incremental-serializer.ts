@@ -104,54 +104,252 @@ export function applyIncrementalChanges(
   previousCanvas: GraphCanvasState | undefined,
 ): string | null {
   if (!previousCanvas) return null;
-  if (!isIncrementalChange(canvas, previousCanvas)) return null;
 
   const lines = rawCode.split('\n');
   let modified = false;
 
+  // Bug8: 方向变更优先处理，不受 isIncrementalChange 限制
+  // 方向变更不改变节点/边结构，应始终走增量路径
+  if (canvas.direction !== previousCanvas.direction) {
+    const directionLineInfo = findFlowchartDirectionLine(lines);
+    if (directionLineInfo !== null) {
+      const oldLine = lines[directionLineInfo.index];
+      // Bug7+Bug8: 保留行首缩进和行尾注释
+      const indent = oldLine.match(/^(\s*)/)?.[1] ?? '';
+      const commentMatch = oldLine.match(/%%\s*.*$/);
+      const comment = commentMatch ? ' ' + commentMatch[0] : '';
+      const newDirection = canvas.direction ?? 'TB';
+      lines[directionLineInfo.index] = `${indent}${directionLineInfo.keyword} ${newDirection}${comment}`;
+      modified = true;
+    }
+    // 若找不到方向行（异常情况），不回退全量，保留原方向行
+  }
+
+  // 其他增量变更需要 isIncrementalChange 检查
+  // Bug7: 即使 isIncrementalChange 返回 false，也尝试处理节点/边增删
+  // 只有图类型变更或无法定位行号时才回退全量
+  const isIncremental = isIncrementalChange(canvas, previousCanvas);
+
+  // Bug7: 处理节点新增 — 追加顶点定义行到 rawCode
+  const addedNodes = canvas.nodes.filter(
+    (n) => !previousCanvas.nodes.some((p) => p.id === n.id),
+  );
+  // Bug7: 收集所有待删除行号，统一按降序删除，避免行号偏移导致后续删除定位错误
+  const linesToDelete = new Set<number>();
+  for (const node of addedNodes) {
+    const vertexCode = serializeVertex(node);
+    lines.push(vertexCode);
+    modified = true;
+  }
+
+  // Bug7: 处理节点删除 — 收集待删除行号
+  const removedNodes = previousCanvas.nodes.filter(
+    (n) => !canvas.nodes.some((c) => c.id === n.id),
+  );
+  for (const node of removedNodes) {
+    const sourceLine = readField<number>(node.data, '_sourceLine');
+    if (sourceLine !== undefined && sourceLine >= 0 && sourceLine < lines.length) {
+      linesToDelete.add(sourceLine);
+      modified = true;
+    }
+    // 同时删除该节点的 style 语句行（若存在）
+    const styleLinePattern = new RegExp(`^\\s*style\\s+${escapeRegExp(node.id)}\\b`);
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (styleLinePattern.test(lines[i])) {
+        linesToDelete.add(i);
+        modified = true;
+        break;
+      }
+    }
+  }
+
+  // Bug7: 处理边新增 — 追加边定义行到 rawCode
+  const addedEdges = canvas.edges.filter(
+    (e) => !previousCanvas.edges.some((p) => p.id === e.id),
+  );
+  for (const edge of addedEdges) {
+    const edgeCode = serializeEdge(edge);
+    lines.push(edgeCode);
+    modified = true;
+  }
+
+  // Bug7: 处理边删除 — 收集待删除行号
+  const removedEdges = previousCanvas.edges.filter(
+    (e) => !canvas.edges.some((c) => c.id === e.id),
+  );
+  for (const edge of removedEdges) {
+    const sourceLine = readField<number>(edge.data, '_sourceLine');
+    if (sourceLine !== undefined && sourceLine >= 0 && sourceLine < lines.length) {
+      linesToDelete.add(sourceLine);
+      modified = true;
+    }
+  }
+
+  // Bug7: 统一按降序删除行，避免行号偏移导致后续删除定位错误
+  // 从后向前删除，前面的行号不受影响
+  const sortedDeletions = Array.from(linesToDelete).sort((a, b) => b - a);
+  for (const lineIdx of sortedDeletions) {
+    if (lineIdx < lines.length) {
+      lines.splice(lineIdx, 1);
+    }
+  }
+
+  // Bug7: 计算行号偏移映射 — 删除行后，_sourceLine 需要调整
+  // sortedDeletions 是降序排列的已删除行号，需要转为升序来计算偏移
+  const deletionAsc = Array.from(linesToDelete).sort((a, b) => a - b);
+  /** 将原始 _sourceLine 转换为删除行后的实际行号 */
+  function getActualLine(originalLine: number): number {
+    let actual = originalLine;
+    for (const deleted of deletionAsc) {
+      if (originalLine > deleted) {
+        actual--;
+      }
+    }
+    return actual;
+  }
+
+  // 若有结构级变更且无法完全增量处理（如 subgraph 归属变更），回退全量
+  // 但若已处理了增删且无其他结构变更，继续处理属性变更
+  if (!isIncremental && modified) {
+    // 检查是否还有未处理的结构变更（subgraph 归属变更、边 source/target 变更）
+    const hasSubgraphChange = canvas.nodes.some((n) => {
+      const prev = previousCanvas.nodes.find((p) => p.id === n.id);
+      return prev && n.parentId !== prev.parentId;
+    });
+    const hasEdgeEndpointChange = canvas.edges.some((e) => {
+      const prev = previousCanvas.edges.find((p) => p.id === e.id);
+      return prev && (e.source !== prev.source || e.target !== prev.target);
+    });
+    if (hasSubgraphChange || hasEdgeEndpointChange) {
+      return null; // subgraph 归属变更或边端点变更 → 回退全量
+    }
+    // 增删已处理，继续处理属性变更
+  } else if (!isIncremental) {
+    return modified ? lines.join('\n') : null;
+  }
+
   // 处理节点属性变更
+  // Bug7: 跳过新增节点（已在前面追加顶点定义行，无 prevNode 可比较）
   for (const node of canvas.nodes) {
     const prevNode = previousCanvas.nodes.find((n) => n.id === node.id);
-    if (!prevNode) return null;
+    if (!prevNode) continue; // 新增节点，跳过属性变更检测
 
     if (!hasNodePropertyChanged(node, prevNode)) continue;
 
+    // Bug5: 检查是否为 styles 变更
+    // styles 是独立语句行（`style nodeId fill:#xxx`），不是顶点定义行的一部分
+    // 需要单独搜索并更新 style 语句行，而非替换顶点定义行
+    const currentStyles = readField<string[]>(node.data, 'styles');
+    const prevStyles = readField<string[]>(prevNode.data, 'styles');
+    const stylesChanged = !arrayEqual(currentStyles, prevStyles);
+
+    if (stylesChanged) {
+      // 搜索 rawCode 中的 style 语句行
+      const styleLinePattern = new RegExp(`^\\s*style\\s+${escapeRegExp(node.id)}\\b`);
+      let styleLineIndex = -1;
+      for (let i = 0; i < lines.length; i++) {
+        if (styleLinePattern.test(lines[i])) {
+          styleLineIndex = i;
+          break;
+        }
+      }
+
+      if (currentStyles && currentStyles.length > 0) {
+        // 有 styles：更新或新增 style 语句行
+        const newStyleLine = `style ${node.id} ${currentStyles.join(',')}`;
+        if (styleLineIndex >= 0) {
+          lines[styleLineIndex] = newStyleLine;
+        } else {
+          lines.push(newStyleLine);
+        }
+        modified = true;
+      } else if (styleLineIndex >= 0) {
+        // styles 被清空：删除 style 语句行
+        lines.splice(styleLineIndex, 1);
+        modified = true;
+      }
+
+      // 如果同时有其他属性变更（label/shape），继续处理顶点定义行
+      const labelChanged = node.data.label !== prevNode.data.label;
+      const shapeChanged = node.data.shape !== prevNode.data.shape;
+      if (!labelChanged && !shapeChanged) {
+        continue; // 仅 styles 变更，已处理完毕
+      }
+    }
+
+    // 其他属性变更（label/shape）：更新顶点定义行
     const sourceLine = readField<number>(node.data, '_sourceLine');
     if (sourceLine === undefined) return null; // 无 _sourceLine → 回退全量
 
-    if (sourceLine < 0 || sourceLine >= lines.length) return null; // 行号越界 → 回退全量
+    // Bug7: 使用偏移映射获取实际行号
+    const actualLine = getActualLine(sourceLine);
+    if (actualLine < 0 || actualLine >= lines.length) return null; // 行号越界 → 回退全量
 
     const newVertexCode = serializeVertex(node);
-    const oldLine = lines[sourceLine];
+    const oldLine = lines[actualLine];
     const replacedLine = replaceVertexInLine(oldLine, node.id, newVertexCode);
     if (replacedLine === null) return null; // 行内容不匹配 → 回退全量
 
-    lines[sourceLine] = replacedLine;
+    lines[actualLine] = replacedLine;
     modified = true;
   }
 
   // 处理边属性变更
+  // Bug7: 跳过新增边（已在前面追加边定义行，无 prevEdge 可比较）
   for (const edge of canvas.edges) {
     const prevEdge = previousCanvas.edges.find((e) => e.id === edge.id);
-    if (!prevEdge) return null;
+    if (!prevEdge) continue; // 新增边，跳过属性变更检测
 
     if (!hasEdgePropertyChanged(edge, prevEdge)) continue;
 
     const sourceLine = readField<number>(edge.data, '_sourceLine');
     if (sourceLine === undefined) return null;
 
-    if (sourceLine < 0 || sourceLine >= lines.length) return null;
+    // Bug7: 使用偏移映射获取实际行号
+    const actualLine = getActualLine(sourceLine);
+    if (actualLine < 0 || actualLine >= lines.length) return null;
 
     const newEdgeCode = serializeEdge(edge);
-    const oldLine = lines[sourceLine];
+    const oldLine = lines[actualLine];
     const replacedLine = replaceEdgeInLine(oldLine, edge, newEdgeCode);
     if (replacedLine === null) return null;
 
-    lines[sourceLine] = replacedLine;
+    lines[actualLine] = replacedLine;
     modified = true;
   }
 
   return modified ? lines.join('\n') : rawCode;
+}
+
+/**
+ * 查找 flowchart 方向声明行
+ *
+ * 匹配格式:
+ *   - `flowchart TD` / `flowchart TB` / `flowchart LR` / `flowchart RL` / `flowchart BT`
+ *   - `graph TD` / `graph TB` / ...（graph 是 flowchart 的别名）
+ *   - 行首可有空格，方向后可有注释（%% ...）、空格或行尾
+ *
+ * @param lines - 代码行数组
+ * @returns 方向行信息（索引 + 关键字），未找到返回 null
+ */
+function findFlowchartDirectionLine(lines: string[]): { index: number; keyword: string } | null {
+  // 匹配带方向的方向行（支持方向后跟注释、空格或行尾）
+  const directionPattern = /^\s*(flowchart|graph)\s+(?:TB|TD|BT|LR|RL)\b/;
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(directionPattern);
+    if (match) {
+      return { index: i, keyword: match[1]! };
+    }
+  }
+  // 兜底：匹配无方向的 `flowchart` 或 `graph` 声明（支持末尾空格和注释）
+  const noDirPattern = /^\s*(flowchart|graph)\s*(?:%%.*)?$/;
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(noDirPattern);
+    if (match) {
+      return { index: i, keyword: match[1]! };
+    }
+  }
+  return null;
 }
 
 // ============================================================

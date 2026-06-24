@@ -140,7 +140,7 @@ export const ShapeRenderer = memo(function ShapeRenderer({
   const stroke = style?.stroke ?? DEFAULT_STROKE;
   const fill = style?.fill ?? DEFAULT_FILL;
   const color = style?.color ?? DEFAULT_COLOR;
-  const strokeWidth = selected ? 3 : 2;
+  const strokeWidth = selected ? Math.max(3, (style?.strokeWidth ?? 2) + 1) : (style?.strokeWidth ?? 2);
   const strokeColor = selected ? '#1890ff' : stroke;
 
   // 解析 label 中的 fa:fa-xxx 图标语法（如 fa:fa-car Car）

@@ -75,8 +75,8 @@ export const SubgraphNodeComponent = memo(function SubgraphNodeComponent({
     <div
       className="mermaid-subgraph"
       style={{
-        width: width ?? MIN_WIDTH,
-        height: height ?? MIN_HEIGHT,
+        width: '100%',
+        height: '100%',
         minWidth: MIN_WIDTH,
         minHeight: MIN_HEIGHT,
         border: `1px solid ${borderColor}`,
@@ -84,6 +84,7 @@ export const SubgraphNodeComponent = memo(function SubgraphNodeComponent({
         backgroundColor: DEFAULT_BG_COLOR,
         position: 'relative',
         boxSizing: 'border-box',
+        overflow: 'visible',
       }}
     >
       {/* 标题栏 */}

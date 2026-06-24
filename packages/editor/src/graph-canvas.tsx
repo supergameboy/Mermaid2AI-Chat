@@ -33,6 +33,7 @@ import {
   serializeMermaid,
   isGraphCanvasState,
   detectCycle,
+  applyIncrementalChanges,
   type CanvasState,
   type MermaidShapeType,
   type MermaidNode,
@@ -50,6 +51,7 @@ import { getNodeTypes, DirectionContext, ConnectionModeContext, type ConnectionM
 import { getEdgeTypes } from './edges/index.js';
 import { FlowchartEdgeMarkers } from './edges/flowchart/index.js';
 import { getLayoutFn } from './layouts/index.js';
+import { recalculateSubgraphSizes, SUBGRAPH_TITLE_HEIGHT } from './layouts/dagre-layout.js';
 import { Toolbar } from './components/toolbar.js';
 import { NodeLibrary } from './components/node-library.js';
 import { ConsumedBadge } from './components/consumed-badge.js';
@@ -150,6 +152,20 @@ function GraphCanvasInner(props: GraphCanvasProps) {
   edgesRef.current = edges;
   directionRef.current = syncDirection;
   metadataRef.current = metadata;
+
+  /**
+   * Bug7: 原始代码保留 — 用于增量序列化保留用户代码格式（注释、空行、缩进、顺序）
+   * - handleCodeChange 解析后更新此 ref 为解析器输出的 rawCode
+   * - mermaidCode useMemo 优先使用增量序列化，保留 rawCode 格式
+   * - 结构级变更（增删节点/边）回退到全量序列化，更新此 ref 为全量序列化结果
+   */
+  const rawCodeRef = useRef<string | undefined>(undefined);
+  /**
+   * Bug7: 前一次画布状态 — 用于增量序列化判断变更类型（属性级 vs 结构级）
+   * - mermaidCode useMemo 每次执行后更新此 ref 为当前画布状态
+   * - 下次执行时与当前画布状态比较，判断是否可增量序列化
+   */
+  const previousCanvasRef = useRef<GraphCanvasState | undefined>(undefined);
 
   const [localDirection, setLocalDirection] = useState<FlowchartDirection>(syncDirection);
 
@@ -257,6 +273,34 @@ function GraphCanvasInner(props: GraphCanvasProps) {
     },
     [onNodesChange, onCanvasEdit, getCanvasSnapshot]
   );
+
+  /** 拖拽结束后重算子图尺寸 — 仅更新 width/height，不修改 position */
+  const handleNodeDragStop = useCallback(
+    (_event: MouseEvent | TouchEvent, node: Node) => {
+      const draggedNode = node as MermaidNode;
+      // 只有子节点（有 parentId）拖拽才需要重算父图尺寸
+      if (!draggedNode.parentId) return;
+      setNodes((nds) => {
+        const updated = recalculateSubgraphSizes(nds);
+        // 如果尺寸有变化，通知外部
+        const hasSizeChange = updated.some((n, i) =>
+          isSubgraphNode(n) && (n.width !== nds[i].width || n.height !== nds[i].height)
+        );
+        if (hasSizeChange) {
+          setTimeout(() => {
+            onCanvasEdit(getCanvasSnapshot());
+          }, 0);
+        }
+        return updated;
+      });
+    },
+    [setNodes, onCanvasEdit, getCanvasSnapshot]
+  );
+
+  /** 判断节点是否为 subgraph 类型 */
+  function isSubgraphNode(node: MermaidNode): boolean {
+    return node.type === 'subgraph' || readField<boolean>(node.data, 'isSubgraph') === true;
+  }
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange<MermaidEdge>[]) => {
@@ -654,6 +698,11 @@ function GraphCanvasInner(props: GraphCanvasProps) {
     if (isGraphCanvasState(newCanvas)) {
       const { nodes, edges, direction, metadata: newMetadata } = newCanvas;
       const safeDirection = direction ?? 'TD';
+
+      // Bug7: 保留原始代码用于增量序列化（保留注释、空行、缩进、顺序）
+      rawCodeRef.current = newCanvas.rawCode;
+      // 重置 previousCanvas，使下次 mermaidCode useMemo 跳过增量序列化（解析后画布已与代码一致）
+      previousCanvasRef.current = undefined;
 
       // flowchart 需要映射 subgraph 节点类型
       const mappedNodes = diagramType === 'flowchart'
@@ -1221,10 +1270,13 @@ function GraphCanvasInner(props: GraphCanvasProps) {
     const minX = Math.min(...selectedNodes.map((n) => n.position.x));
     const minY = Math.min(...selectedNodes.map((n) => n.position.y));
 
+    // Bug4 修复：subgraph 的绝对位置（考虑子节点位置的包围盒）
+    const subgraphAbsPos = { x: minX - 20, y: minY - 40 };
+
     const newNode: MermaidNode = {
       id: subgraphId,
       type: 'subgraph',
-      position: { x: minX - 20, y: minY - 40 },
+      position: subgraphAbsPos,
       data: {
         label: '新子图',
         shape: 'rect',
@@ -1234,15 +1286,37 @@ function GraphCanvasInner(props: GraphCanvasProps) {
     };
 
     setNodes((nds) => {
-      // 将选中节点的 parentId 设为 subgraphId
-      const newNodes = nds.map((n) =>
-        selectedNodeIds.includes(n.id)
-          ? { ...n, parentId: subgraphId, extent: 'parent' as const }
-          : n,
-      );
+      // Bug4 修复：将选中节点的绝对坐标转换为相对于 subgraph 的坐标
+      // dagre 约定子节点 Y 坐标包含 SUBGRAPH_TITLE_HEIGHT 偏移
+      const newNodes = nds.map((n) => {
+        if (!selectedNodeIds.includes(n.id)) return n;
+        // 计算节点绝对坐标（可能已在其他子图中）
+        let absX = n.position.x;
+        let absY = n.position.y;
+        let currentParentId = n.parentId;
+        const visited = new Set<string>();
+        while (currentParentId && !visited.has(currentParentId)) {
+          visited.add(currentParentId);
+          const parent = nds.find((p) => p.id === currentParentId);
+          if (!parent) break;
+          absX += parent.position.x;
+          absY += parent.position.y;
+          currentParentId = parent.parentId;
+        }
+        return {
+          ...n,
+          parentId: subgraphId,
+          position: {
+            x: absX - subgraphAbsPos.x,
+            y: absY - subgraphAbsPos.y + SUBGRAPH_TITLE_HEIGHT,
+          },
+        };
+      });
       newNodes.push(newNode);
+      // Bug4 修复：调用 recalculateSubgraphSizes 计算 subgraph 的 width/height
+      const result = recalculateSubgraphSizes(newNodes);
       setTimeout(() => onCanvasEdit(getCanvasSnapshot()));
-      return newNodes;
+      return result;
     });
     setSelectedNodeId(subgraphId);
   }, [contextMenu, setNodes, onCanvasEdit, getCanvasSnapshot]);
@@ -1262,17 +1336,71 @@ function GraphCanvasInner(props: GraphCanvasProps) {
     });
   }, [contextMenu, setNodes, onCanvasEdit, getCanvasSnapshot]);
 
-  /** 移动节点到 subgraph（subgraphId 为 null 表示移出到顶层） */
+  /** 移动节点到 subgraph（subgraphId 为 null 表示移出到顶层）
+   *
+   * 坐标转换说明：
+   * - React Flow Parent Node 机制下，子节点 position 是相对于父节点的坐标
+   * - 移入子图：绝对坐标 → 相对坐标（减去目标 subgraph 的绝对坐标）
+   * - 移出子图：相对坐标 → 绝对坐标（累加所有祖先 subgraph 的 position）
+   * - 不设置 extent:'parent'，允许子节点自由移动（用户要求去除移动限制）
+   *
+   * 嵌套子图处理：
+   * - 移出多层嵌套子图时，需要累加所有祖先的 position 才能得到绝对坐标
+   * - 移入嵌套子图时，需要计算目标 subgraph 的绝对坐标（累加其所有祖先）
+   */
   const handleMoveToSubgraph = useCallback((nodeId: string, subgraphId: string | null) => {
     setNodes((nds) => {
-      const newNodes = nds.map((n) => {
+      // 计算节点的绝对坐标（累加所有祖先 subgraph 的 position）
+      const getAbsolutePosition = (node: MermaidNode): { x: number; y: number } => {
+        let x = node.position.x;
+        let y = node.position.y;
+        let currentParentId = node.parentId;
+        const visited = new Set<string>(); // 防止循环引用
+        while (currentParentId && !visited.has(currentParentId)) {
+          visited.add(currentParentId);
+          const parent = nds.find((p) => p.id === currentParentId);
+          if (!parent) break;
+          x += parent.position.x;
+          y += parent.position.y;
+          currentParentId = parent.parentId;
+        }
+        return { x, y };
+      };
+
+      const moved = nds.map((n) => {
         if (n.id !== nodeId) return n;
         if (subgraphId === null) {
+          // 移出子图：相对坐标 → 绝对坐标
+          // getAbsolutePosition 累加所有祖先的 position（已含 SUBGRAPH_TITLE_HEIGHT 偏移），
+          // 返回的已经是正确的绝对坐标，不需要额外加偏移
           const { parentId, extent, ...rest } = n;
-          return rest;
+          const absolutePos = getAbsolutePosition(n);
+          return {
+            ...rest,
+            position: {
+              x: absolutePos.x,
+              y: absolutePos.y,
+            },
+          };
         }
-        return { ...n, parentId: subgraphId, extent: 'parent' as const };
+        // 移入子图：绝对坐标 → 相对坐标
+        // dagre 布局约定子节点 Y 坐标包含 SUBGRAPH_TITLE_HEIGHT 偏移，
+        // 所以相对坐标 = 绝对坐标差 + SUBGRAPH_TITLE_HEIGHT
+        const subgraph = nds.find((p) => p.id === subgraphId);
+        if (!subgraph) return { ...n, parentId: subgraphId };
+        const nodeAbsPos = getAbsolutePosition(n);
+        const subgraphAbsPos = getAbsolutePosition(subgraph);
+        return {
+          ...n,
+          parentId: subgraphId,
+          position: {
+            x: nodeAbsPos.x - subgraphAbsPos.x,
+            y: nodeAbsPos.y - subgraphAbsPos.y + SUBGRAPH_TITLE_HEIGHT,
+          },
+        };
       });
+      // Bug2: 移动节点后重算所有 subgraph 尺寸（源/目标 subgraph 都需要更新）
+      const newNodes = recalculateSubgraphSizes(moved);
       setTimeout(() => onCanvasEdit(getCanvasSnapshot()));
       return newNodes;
     });
@@ -1281,15 +1409,44 @@ function GraphCanvasInner(props: GraphCanvasProps) {
   /** 删除 subgraph 节点（子节点移出到顶层） */
   const handleDeleteSubgraph = useCallback((id: string) => {
     setNodes((nds) => {
-      const newNodes = nds
+      // Bug4 修复：先获取被删除 subgraph 的绝对位置，用于子节点坐标转换
+      const subgraph = nds.find((n) => n.id === id);
+      const subgraphAbsPos = subgraph ? (() => {
+        let x = subgraph.position.x;
+        let y = subgraph.position.y;
+        let currentParentId = subgraph.parentId;
+        const visited = new Set<string>();
+        while (currentParentId && !visited.has(currentParentId)) {
+          visited.add(currentParentId);
+          const parent = nds.find((p) => p.id === currentParentId);
+          if (!parent) break;
+          x += parent.position.x;
+          y += parent.position.y;
+          currentParentId = parent.parentId;
+        }
+        return { x, y };
+      })() : { x: 0, y: 0 };
+
+      const filtered = nds
         .filter((n) => n.id !== id)
         .map((n) => {
           if (n.parentId === id) {
+            // Bug4 修复：相对坐标 → 绝对坐标
+            // 子节点的 position.y 已含 SUBGRAPH_TITLE_HEIGHT 偏移，
+            // 转为绝对坐标时需要加上 subgraph 的绝对位置，并减去偏移
             const { parentId, extent, ...rest } = n;
-            return rest;
+            return {
+              ...rest,
+              position: {
+                x: n.position.x + subgraphAbsPos.x,
+                y: n.position.y + subgraphAbsPos.y - SUBGRAPH_TITLE_HEIGHT,
+              },
+            };
           }
           return n;
         });
+      // Bug2: 删除子图后重算剩余 subgraph 尺寸
+      const newNodes = recalculateSubgraphSizes(filtered);
       setTimeout(() => onCanvasEdit(getCanvasSnapshot()));
       return newNodes;
     });
@@ -1301,7 +1458,20 @@ function GraphCanvasInner(props: GraphCanvasProps) {
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) ?? null : null;
   const selectedEdge = selectedEdgeId ? edges.find((e) => e.id === selectedEdgeId) ?? null : null;
 
-  // M0: 统一使用 serializeMermaid 序列化画布为 Mermaid 代码
+  /**
+   * 序列化画布为 Mermaid 代码
+   *
+   * Bug7: 优先使用增量序列化保留用户原始代码格式（注释、空行、缩进、顺序）
+   * Bug8: 方向变更时通过增量序列化更新 `flowchart XXX` 行的方向标志
+   *
+   * 序列化策略:
+   * 1. 增量序列化（属性级变更）：基于 rawCode 定位行替换，保留原始格式
+   * 2. 全量序列化（结构级变更/首次序列化）：从画布状态全量生成代码
+   *
+   * rawCode 来源:
+   * - handleCodeChange 解析后存储解析器输出的 rawCode
+   * - 全量序列化后存储全量序列化结果
+   */
   const mermaidCode = useMemo(() => {
     const canvas: GraphCanvasState = {
       diagramType,
@@ -1310,7 +1480,36 @@ function GraphCanvasInner(props: GraphCanvasProps) {
       direction: localDirection,
       ...(metadata ? { metadata } : {}),
     };
+
+    // Bug7: 尝试增量序列化（保留原始代码格式）
+    // 注意：applyIncrementalChanges 是 flowchart 专用增量序列化器
+    // 非 flowchart 图类型（class/er/state 等）跳过增量，使用全量序列化
+    if (rawCodeRef.current && previousCanvasRef.current && diagramType === 'flowchart') {
+      const incrementalResult = applyIncrementalChanges(
+        rawCodeRef.current,
+        canvas,
+        previousCanvasRef.current,
+      );
+      if (incrementalResult !== null) {
+        // 增量序列化成功，更新 rawCode 为最新代码（保持行号映射一致性）
+        rawCodeRef.current = incrementalResult;
+        previousCanvasRef.current = canvas;
+        return incrementalResult;
+      }
+    }
+
+    // Bug7: handleCodeChange 刚执行 — rawCode 已与画布一致，直接返回保留格式
+    // 此时 previousCanvas 为 undefined（handleCodeChange 重置），设置后下次可走增量路径
+    // 仅对 flowchart 类型生效（其他类型无增量序列化器，走全量）
+    if (rawCodeRef.current && !previousCanvasRef.current && diagramType === 'flowchart') {
+      previousCanvasRef.current = canvas;
+      return rawCodeRef.current;
+    }
+
+    // 全量序列化（结构级变更或首次序列化）
     const result = serializeMermaid(canvas);
+    rawCodeRef.current = result.mermaid;
+    previousCanvasRef.current = canvas;
     return result.mermaid;
   }, [diagramType, nodes, edges, localDirection, metadata]);
 
@@ -1475,6 +1674,7 @@ function GraphCanvasInner(props: GraphCanvasProps) {
                 onDragOver={onDragOver}
                 onNodeContextMenu={handleNodeContextMenu}
                 onPaneContextMenu={handlePaneContextMenu}
+                onNodeDragStop={handleNodeDragStop}
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
                 deleteKeyCode={null}

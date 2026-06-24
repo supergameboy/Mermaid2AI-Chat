@@ -31,6 +31,7 @@ import type {
   GraphMetadata,
   FlowClassDefInfo,
   ParseError,
+  NodeStyle,
 } from '../../types.js';
 import type {
   FlowchartAST,
@@ -328,21 +329,83 @@ function getEdgeMarkers(
 }
 
 /**
+ * 将 style 语句的字符串数组解析为结构化 NodeStyle 对象
+ * style 语句格式: "fill:#e1f5fe", "stroke:#333", "stroke-width:2", "color:#fff"
+ */
+function parseStylesToNodeStyle(styles: string[]): NodeStyle | undefined {
+  if (styles.length === 0) return undefined;
+  const result: NodeStyle = {};
+  for (const s of styles) {
+    const colonIndex = s.indexOf(':');
+    if (colonIndex === -1) continue;
+    const key = s.substring(0, colonIndex).trim();
+    const value = s.substring(colonIndex + 1).trim();
+    switch (key) {
+      case 'fill':
+        result.fill = value;
+        break;
+      case 'stroke':
+        result.stroke = value;
+        break;
+      case 'stroke-width':
+      case 'strokeWidth': {
+        const w = Number(value);
+        if (Number.isFinite(w)) result.strokeWidth = w;
+        break;
+      }
+      case 'color':
+        result.color = value;
+        break;
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+/**
  * 将 FlowVertex 映射为 MermaidNode
  * @param vertex - FlowVertex AST 节点
  * @param parentDB - 节点 ID → parentId 映射
  * @param subGraphDB - 节点 ID → 是否为 subgraph 映射
  * @param tooltips - 节点 ID → tooltip 映射（来自 FlowDB.setTooltip）
+ * @param flowClassDefs - classDef 定义列表（用于将 classDef 样式编译到节点的 data.style）
  */
 function mapVertexToNode(
   vertex: FlowVertex,
   parentDB: Map<string, string>,
   subGraphDB: Map<string, boolean>,
   tooltips: Map<string, string>,
+  flowClassDefs: FlowClassDefInfo[],
 ): MermaidNode {
   const parentId = parentDB.get(vertex.id);
   const isGroup = subGraphDB.get(vertex.id) ?? false;
   const tooltip = tooltips.get(vertex.id);
+
+  // Bug5 修复：合并 classDef 样式和直接 style 到节点的 data.style
+  // classDef 样式优先级低于直接 style（直接 style 覆盖 classDef）
+  const mergedStyle: NodeStyle = {};
+
+  // 1. 先合并 classDef 样式（按 class 声明顺序，后声明的覆盖先声明的）
+  if (vertex.classes.length > 0 && flowClassDefs.length > 0) {
+    for (const className of vertex.classes) {
+      const classDef = flowClassDefs.find(cd => cd.id === className);
+      if (classDef?.styles && classDef.styles.length > 0) {
+        const classStyle = parseStylesToNodeStyle(classDef.styles);
+        if (classStyle) {
+          Object.assign(mergedStyle, classStyle);
+        }
+      }
+    }
+  }
+
+  // 2. 再合并直接 style（直接 style 优先级高于 classDef）
+  if (vertex.styles.length > 0) {
+    const directStyle = parseStylesToNodeStyle(vertex.styles);
+    if (directStyle) {
+      Object.assign(mergedStyle, directStyle);
+    }
+  }
+
+  const hasMergedStyle = Object.keys(mergedStyle).length > 0;
 
   const data: MermaidNodeData = {
     label: vertex.text ?? vertex.id,
@@ -350,7 +413,8 @@ function mapVertexToNode(
     classNames: vertex.classes.length > 0 ? vertex.classes : undefined,
     tooltip,
     // flowchart 专用扩展字段（通过索引签名承载）
-    ...(vertex.styles.length > 0 ? { styles: vertex.styles } : {}),
+    ...(hasMergedStyle ? { style: mergedStyle, styles: vertex.styles } : {}),
+    ...(vertex.styles.length > 0 && !hasMergedStyle ? { styles: vertex.styles } : {}),
     ...(vertex.labelType !== 'text' ? { labelType: vertex.labelType } : {}),
     ...(vertex.dir ? { dir: vertex.dir } : {}),
     ...(vertex.props ? { props: vertex.props } : {}),
@@ -472,22 +536,36 @@ function mapAstToCanvasState(ast: FlowchartAST): GraphCanvasState {
     }
   }
 
-  // 添加顶点节点（传入 tooltips 映射）
+  // 构建 subgraph ID 集合（用于顶点去重：当顶点 ID 与 subgraph ID 重复时跳过顶点）
+  const subgraphIds = new Set<string>();
+  for (const sg of ast.subGraphs) {
+    if (sg) {
+      subgraphIds.add(sg.id);
+    }
+  }
+
+  // Bug5: 将 FlowClass 转换为 FlowClassDefInfo，需要在 mapVertexToNode 之前声明
+  // 以便将 classDef 样式编译到节点的 data.style
+  const flowClassDefs: FlowClassDefInfo[] = ast.classes.map((c) => ({
+    id: c.id,
+    styles: c.styles,
+    textStyles: c.textStyles,
+  }));
+
+  // 添加顶点节点（传入 tooltips 映射和 flowClassDefs）
+  // 跳过与 subgraph ID 重复的顶点（Mermaid 语法中 subgraph ID 和顶点 ID 共享命名空间，
+  // 当 `subgraph Start[开始]` 和 `Start[Start]` 同时存在时，顶点应被 subgraph 吸收）
   for (const vertex of ast.vertices) {
-    nodes.push(mapVertexToNode(vertex, parentDB, subGraphDB, ast.tooltips));
+    if (subgraphIds.has(vertex.id)) {
+      continue;
+    }
+    nodes.push(mapVertexToNode(vertex, parentDB, subGraphDB, ast.tooltips, flowClassDefs));
   }
 
   // 添加边
   ast.edges.forEach((edge, index) => {
     edges.push(mapEdgeToMermaidEdge(edge, index));
   });
-
-  // 将 FlowClass 转换为 FlowClassDefInfo（对齐类型定义）
-  const flowClassDefs: FlowClassDefInfo[] = ast.classes.map((c) => ({
-    id: c.id,
-    styles: c.styles,
-    textStyles: c.textStyles,
-  }));
 
   // 构建元数据
   const metadata: GraphMetadata = {
